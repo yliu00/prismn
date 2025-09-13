@@ -96,27 +96,19 @@ def has_significant_change(
     return False
 
 
-async def register_peer(peer_id: str, hostname: str, long: float, lat: float):
-    """
-    Register a new peer in the pipeline.
-
-    Args:
-        peer_id: The unique identifier of the peer
-        hostname: The hostname of the peer machine
-    """
+async def register_peer(peer_id: str, hostname: str, lon: float, lat: float):
     await db[PEERS_COLLECTION].update_one(
         {"peer_id": peer_id},
-        {
-            "$set": {
-                "peer_id": peer_id,
-                "hostname": hostname,
-                "last_seen": datetime.utcnow(),
-                "is_active": True,
-                "last_metrics": None,  # Store last metrics for change detection
-                "long": long,
-                "lat": lat
-            }
-        },
+        {"$set": {
+            "peer_id": peer_id,
+            "hostname": hostname,
+            "last_seen": datetime.utcnow(),
+            "is_active": True,
+            "last_metrics": None,
+            "lon": float(lon),
+            "lat": float(lat),
+            "location": {"type": "Point", "coordinates": [float(lon), float(lat)]},
+        }},
         upsert=True,
     )
 

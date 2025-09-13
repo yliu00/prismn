@@ -6,7 +6,7 @@ import socket
 import threading
 import time
 from typing import Any, Dict, List
-
+from utils.db_utils import db, PEERS_COLLECTION
 import httpx
 import numpy as np
 from colorama import Fore, Style
@@ -791,9 +791,14 @@ async def main():
     )  # ? Misleading, does our use of the term peer mean that it is registered w server?
     heartbeat_task = asyncio.create_task(http_heartbeat_loop(current_peer_ticket))
     LONG = os.environ.get("LONG",42.5907715)
-    LAT = os.environ.get("LAt",42.5907715)
-    await register_peer(current_peer_ticket, hostname, 10, 15)
-    print(f"✅ Registered in MongoDB as {current_peer_ticket}")
+    LAT = os.environ.get("LAT",42.5907715)
+    await register_peer(current_peer_ticket, hostname, LAT, LONG)
+    doc = await db[PEERS_COLLECTION].find_one(
+    {"peer_id": current_peer_ticket},
+    {"_id": 0, "lon": 1, "lat": 1, "location": 1}
+)
+    print("DB coords:", doc)
+    print(f"✅ yes Registered in MongoDB as {current_peer_ticket}")
 
     # Main gateway to receive web requests
     print("Starting unified message gateway...")
