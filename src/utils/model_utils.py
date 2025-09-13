@@ -331,6 +331,8 @@ def distribute_layers_across_peers(
     safety_margin: float = 0.1,
     batch_size: int = 1,
     seq_length: int = 2048,
+    longitude: float = 0.0,
+    latitude: float = 0.0,
 ) -> Dict[str, Any]:
     """
     Distribute model layers optimally across multiple GPU peers.

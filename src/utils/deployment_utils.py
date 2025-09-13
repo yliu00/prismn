@@ -113,7 +113,7 @@ async def get_peers_with_vram():
     return peers_vram
 
 
-def create_distribution_plan(metadata, peers_vram, q_bits: int = 32):
+def create_distribution_plan(metadata, peers_vram, q_bits: int = 32, longitude: float = 121.20, latitude: float = 110.10):
     # Use metadata provided by sharding to avoid hardcoded defaults
     num_hidden_layers = int(metadata.get("num_layers"))
     hidden_size = int(metadata.get("hidden_size"))
@@ -134,6 +134,8 @@ def create_distribution_plan(metadata, peers_vram, q_bits: int = 32):
     distribution_plan = distribute_layers_across_peers(
         config=config,
         peers_vram=peers_vram,
+        longitude=longitude,
+        latitude=latitude,
         q_bits=q_bits,  # Allow caller to choose precision for VRAM estimate
     )
     print("📋 Distribution plan created:")
