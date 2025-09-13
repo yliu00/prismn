@@ -1,0 +1,5 @@
+#! /bin/sh
+
+ export MONGODB_URI="mongodb://mongo:wsjcLEbBdPkRBjuTjjVmMuMdyfzRVfgA@nozomi.proxy.rlwy.net:14848"
+ export MONGODB_DB_NAME="iroh_tandemn"
+ export HUGGINGFACE_TOKEN="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"

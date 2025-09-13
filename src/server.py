@@ -62,37 +62,38 @@ active_requests = {}  # Request ID -> Dict of metadata
 central_server_ticket = None
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI ):
-    """Initialize the Iroh node and document on server startup"""
-    global central_server_ticket, tensor_transport
+async def lifespan(app: FastAPI):
+    # --- Startup ---
+    global tensor_transport, central_server_ticket
     print("🚀 Starting Iroh Tandemn server...")
 
-    # Set up MongoDB collections
     await setup_collections()
     print("✅ MongoDB collections configured")
 
-    # Clear all peer records on fresh server start to prevent stale data; comment all this for prod
     delete_result = await _db[PEERS_COLLECTION].delete_many({})
-    if delete_result.deleted_count > 0:
-        print(
-            f"🧹 Cleared {delete_result.deleted_count} stale peer record(s) from previous sessions"
-        )
+    if delete_result.deleted_count:
+        print(f"🧹 Cleared {delete_result.deleted_count} stale peer record(s)")
     else:
         print("🧹 No previous peer records found to clear")
-    # only need to do this when we are testing ^^^
 
-    # Start the TensorTransport for the central server ##############################################
     tensor_transport = TensorTransport()
     await tensor_transport.start()
     central_server_ticket = tensor_transport.ticket
-    print(
-        f"🪪 TensorTransport for the central server started – ticket:\n{central_server_ticket}\n"
-    )
-    #################################################################################################
+    print(f"🪪 TensorTransport started – ticket:\n{central_server_ticket}\n")
 
-    # Start the background task for cleaning up inactive peers
     asyncio.create_task(periodic_peer_cleanup())
+
+    # Hand control to the app runtime
+    try:
+        yield
+    finally:
+        # --- Shutdown ---
+        print("🛑 Shutting down Iroh Tandemn server...")
+        if tensor_transport:
+            try:
+                await tensor_transport.stop()
+            except Exception as e:
+                print(f"Warning during shutdown: {e}")
 # Initialize FastAPI application
 app = FastAPI(title="Iroh Tandemn Server", lifespan=lifespan)
 
