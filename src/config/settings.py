@@ -7,7 +7,7 @@ env_path = Path(__file__).parent.parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)
 
 # Server settings
-SERVER_HOST = os.getenv("SERVER_HOST", "0.0.0.0")
+SERVER_HOST = os.getenv("SERVER_HOST", "127.0.0.1")
 SERVER_PORT = int(os.getenv("SERVER_PORT", "7500"))
 
 # MongoDB settings

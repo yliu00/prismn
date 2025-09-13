@@ -96,7 +96,7 @@ def has_significant_change(
     return False
 
 
-async def register_peer(peer_id: str, hostname: str):
+async def register_peer(peer_id: str, hostname: str, long: float, lat: float):
     """
     Register a new peer in the pipeline.
 
@@ -113,6 +113,8 @@ async def register_peer(peer_id: str, hostname: str):
                 "last_seen": datetime.utcnow(),
                 "is_active": True,
                 "last_metrics": None,  # Store last metrics for change detection
+                "long": long,
+                "lat": lat
             }
         },
         upsert=True,

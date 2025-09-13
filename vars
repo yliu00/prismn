@@ -3,3 +3,5 @@
  export MONGODB_URI="mongodb://mongo:wsjcLEbBdPkRBjuTjjVmMuMdyfzRVfgA@nozomi.proxy.rlwy.net:14848"
  export MONGODB_DB_NAME="iroh_tandemn"
  export HUGGINGFACE_TOKEN="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"
+ export SERVER_HOST="127.0.0.1"
+ export SERVER_PORT="7500"

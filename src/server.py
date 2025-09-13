@@ -202,6 +202,7 @@ async def health():
                 metrics_history = await get_peer_metrics(
                     peer_id, time_window=60
                 )  # Last minute
+                print(metrics_history)
                 if metrics_history:
                     latest_metrics = metrics_history[0][
                         "metrics"

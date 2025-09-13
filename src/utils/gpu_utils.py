@@ -16,6 +16,10 @@ class GPUInfo:
     utilization_percent: Optional[float]
     temperature_celsius: Optional[float]
 
+@dataclass
+class GeoMetrics:
+    long: float
+    lat: float
 
 @dataclass
 class SystemMetrics:
@@ -139,6 +143,14 @@ def get_total_free_vram() -> float:
     for gpu in get_gpu_info():
         total_free += gpu.free_vram_gb
     return round(total_free, 2)
+# def get_geo_info() -> GeoMetrics:
+#     long = -71.5723953
+#     lat = 42.5907715
+#     return GeoMetrics(
+#             long=long,
+#             lat=lat
+#             )
+
 
 
 def format_metrics_for_db(metrics: SystemMetrics) -> Dict[str, Any]:

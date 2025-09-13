@@ -11,7 +11,7 @@ import httpx
 import numpy as np
 from colorama import Fore, Style
 from colorama import init as colorama_init
-from lmcache.experimental.cache_engine import LMCacheEngineBuilder
+from lmcache.v1.cache_engine import LMCacheEngineBuilder
 from lmcache.integration.vllm.utils import ENGINE_NAME
 from transformers import AutoTokenizer
 from vllm import SamplingParams
@@ -516,6 +516,7 @@ async def dispatch_batch(
 
         # Send batch info to server
         server_url = f"http://{SERVER_HOST}:{SERVER_PORT}"
+        print("HERE ",server_url)
         server_task = asyncio.create_task(
             send_batch_info(batch_id, request_ids, server_url)
         )
@@ -718,6 +719,7 @@ async def http_heartbeat_loop(current_peer_ticket: str, interval_s: float = 1.0)
     consecutive_failures = 0
     max_failures = 10  # 10 seconds tolerance
     server_url = f"http://{SERVER_HOST}:{SERVER_PORT}/heartbeat"
+    print(f"HB {server_url}")
     server_added = False
 
     async with httpx.AsyncClient(timeout=2.0) as client:
@@ -734,7 +736,9 @@ async def http_heartbeat_loop(current_peer_ticket: str, interval_s: float = 1.0)
                     "gpu_count": len(metrics.gpu_info),
                     "timestamp": int(time.time()),
                 }
+                print(payload)
                 response = await client.post(server_url, json=payload)
+                print(f"response: {response} | {server_url}")
                 if response.status_code == 200:
                     data = response.json()
                     # Only add server to network once
@@ -746,10 +750,12 @@ async def http_heartbeat_loop(current_peer_ticket: str, interval_s: float = 1.0)
                     # print(f"{PEER_COLOR}💓 Sent heartbeat | CPU {metrics.cpu_percent:.1f}% VRAM {total_free_vram:.1f} GB → ACK {Style.RESET_ALL}")
                 else:
                     consecutive_failures += 1
+                    print("HB failed")
                     print(
                         f"{PEER_COLOR}⚠️ Heartbeat HTTP {response.status_code}{Style.RESET_ALL}"
                     )
             except Exception as e:
+                print(f"HB exception {e}")
                 consecutive_failures += 1
                 print(f"{PEER_COLOR}⚠️ Heartbeat error: {e}{Style.RESET_ALL}")
             if consecutive_failures >= max_failures:
@@ -784,7 +790,9 @@ async def main():
         f"🤖 Running as peer: {current_peer_ticket}"
     )  # ? Misleading, does our use of the term peer mean that it is registered w server?
     heartbeat_task = asyncio.create_task(http_heartbeat_loop(current_peer_ticket))
-    await register_peer(current_peer_ticket, hostname)
+    LONG = os.environ.get("LONG",42.5907715)
+    LAT = os.environ.get("LAt",42.5907715)
+    await register_peer(current_peer_ticket, hostname, 10, 15)
     print(f"✅ Registered in MongoDB as {current_peer_ticket}")
 
     # Main gateway to receive web requests
