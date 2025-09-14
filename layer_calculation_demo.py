@@ -91,7 +91,7 @@ async def demo_layer_calculations():
         print(f"Approximate memory per layer: {vram_per_layer:.3f} GB  •  Embeddings: {embedding_vram:.3f} GB  •  Total: {total_vram:.3f} GB")
 
         # --- Demo peers (as provided) ---
-        peers_info_demo = {
+        """peers_info_demo = {
             "peer_oslo_3060":   {"free_vram_gb": 0.164, "lat": 59.9139, "lon": 10.7522, "carbon_intensity_g_per_kwh": 18.0},
             "peer_paris_a6000": {"free_vram_gb": 0.625, "lat": 48.8566, "lon": 2.3522,  "carbon_intensity_g_per_kwh": 44.0},
             "peer_stockholm_4090": {"free_vram_gb": 0.362,"lat": 59.3293,"lon": 18.0686,"carbon_intensity_g_per_kwh": 19.0},
@@ -102,7 +102,27 @@ async def demo_layer_calculations():
             "peer_sydney_h100": {"free_vram_gb": 1.250, "lat": -33.8688,"lon": 151.2093, "carbon_intensity_g_per_kwh": 626.0},
             "peer_delhi_3070":  {"free_vram_gb":  0.099, "lat": 28.6139, "lon": 77.2090, "carbon_intensity_g_per_kwh": 632.0},
             "peer_shanghai_a10":{"free_vram_gb": 0.329, "lat": 31.2304, "lon": 121.4737,"carbon_intensity_g_per_kwh": 560.0},
-        }
+        }"""
+        peers_info_demo = {
+    "peer_oslo_3060":      {"free_vram_gb": 0.35, "lat": 59.9139,  "lon": 10.7522,   "carbon_intensity_g_per_kwh": 18.0},
+    "peer_stockholm_4090": {"free_vram_gb": 0.85, "lat": 59.3293,  "lon": 18.0686,   "carbon_intensity_g_per_kwh": 19.0},
+    "peer_paris_a6000":    {"free_vram_gb": 1.10, "lat": 48.8566,  "lon": 2.3522,    "carbon_intensity_g_per_kwh": 44.0},
+    "peer_berlin_3080":    {"free_vram_gb": 0.25, "lat": 52.5200,  "lon": 13.4050,   "carbon_intensity_g_per_kwh": 419.0},
+    "peer_warsaw_t4x2":    {"free_vram_gb": 0.75, "lat": 52.2297,  "lon": 21.0122,   "carbon_intensity_g_per_kwh": 692.0},
+    "peer_saopaulo_a100":  {"free_vram_gb": 1.20, "lat": -23.5505, "lon": -46.6333,  "carbon_intensity_g_per_kwh": 97.0},
+    "peer_sfo_v100":       {"free_vram_gb": 0.80, "lat": 37.7749,  "lon": -122.4194, "carbon_intensity_g_per_kwh": 384.0},
+    "peer_sydney_h100":    {"free_vram_gb": 1.25, "lat": -33.8688, "lon": 151.2093,  "carbon_intensity_g_per_kwh": 626.0},
+    "peer_delhi_3070":     {"free_vram_gb": 0.20, "lat": 28.6139,  "lon": 77.2090,   "carbon_intensity_g_per_kwh": 632.0},
+    "peer_shanghai_a10":   {"free_vram_gb": 0.45, "lat": 31.2304,  "lon": 121.4737,  "carbon_intensity_g_per_kwh": 560.0},
+    "peer_london_3090":    {"free_vram_gb": 0.60, "lat": 51.5074,  "lon": -0.1278,   "carbon_intensity_g_per_kwh": 215.0},
+    "peer_madrid_3080":    {"free_vram_gb": 0.40, "lat": 40.4168,  "lon": -3.7038,   "carbon_intensity_g_per_kwh": 230.0},
+    "peer_toronto_a5000":  {"free_vram_gb": 0.95, "lat": 43.6532,  "lon": -79.3832,  "carbon_intensity_g_per_kwh": 120.0},
+    "peer_tokyo_a10g":     {"free_vram_gb": 0.55, "lat": 35.6762,  "lon": 139.6503,  "carbon_intensity_g_per_kwh": 430.0},
+    "peer_cape_town_3070": {"free_vram_gb": 0.30, "lat": -33.9249, "lon": 18.4241,   "carbon_intensity_g_per_kwh": 820.0},
+}
+
+
+        server_location = (42.3601, -71.0589) # MIT
 
         # NOTE: your original sample overwrote VRAMs with tiny decimals.
         # For a realistic, non-technical demo, we’ll use the "free_vram_gb" values above.
@@ -115,14 +135,17 @@ async def demo_layer_calculations():
             for pid, v in example_peers.items():
                 print(f"  {pid}: {v:.1f} GB")
 
+        print("\nCalculating max layers per machine...")
+        print(f"{'='*20}Baseline: VRAM-only{'='*20}")
         # --- Baseline: VRAM-only ---
         baseline = distribute_layers_across_peers(
             config, example_peers, example_carbon, example_locations, qbits
         )
 
+        print(f"\n{'='*20}Improved: Carbon + Travel{'='*20}")
         # --- Improved: Carbon + Travel ---
         improved = optimized_distribute_layers_across_peers(
-            config, example_peers, example_carbon, example_locations, qbits
+            config, example_peers, example_carbon, example_locations, qbits, server_location=server_location
         )
 
         # --- Executive view: key outcomes ---

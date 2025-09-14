@@ -32,8 +32,17 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     r = 6371
     return c * r
 
-
-def calculate_node_score(carbon_intensity: float, vram_gb: float, weight_carbon: float = 0.7, weight_vram: float = 0.3) -> float:
+def calculate_node_score(carbon_intensity: float, 
+                         vram_gb: float, 
+                         distance_km: float, 
+                         weight_carbon: float = 0.6, 
+                         weight_vram: float = 0.2, 
+                         weight_distance: float = 0.2,
+                        # Normalization anchors (tune/learn per fleet)
+                        carbon_max: float = 1000.0,   # gCO2/kWh
+                        vram_max: float = 100.0,      # GB
+                        dist_max_km: float = 10_000.0 # cap at intercontinental
+                        ) -> float:
     """
     Calculate a composite score for peer selection.
     Lower scores are better (prefer lower carbon intensity and higher VRAM).
@@ -44,16 +53,19 @@ def calculate_node_score(carbon_intensity: float, vram_gb: float, weight_carbon:
         weight_carbon: Weight for carbon intensity (default 0.7)
         weight_vram: Weight for VRAM (default 0.3)
         
-    Returns:
+    Returns: 
         Composite score (lower is better)
     """
     # Normalize carbon intensity (assume range 0-1000 gCO2/kWh, lower is better)
-    carbon_score = carbon_intensity / 1000.0
+    carbon_score = carbon_intensity / carbon_max
     
     # Normalize VRAM (assume range 0-100 GB, higher is better, so invert)
-    vram_score = 1.0 - min(vram_gb / 100.0, 1.0)
-    
-    return weight_carbon * carbon_score + weight_vram * vram_score
+    vram_score = 1.0 - min(vram_gb / vram_max, 1.0)
+
+    # Normalize distance (assume range 0-1000 km, lower is better)
+    dist_score = math.log1p(min(distance_km, dist_max_km)) / math.log1p(dist_max_km)
+
+    return weight_carbon * carbon_score + weight_vram * vram_score + weight_distance * dist_score
 
 
 def calculate_edge_score(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -839,8 +851,9 @@ def optimized_distribute_layers_across_peers(
     for peer_id in candidate_peers:
         carbon_intensity = peers_carbon_intensity[peer_id]
         vram_gb = peers_vram[peer_id]
-        node_scores[peer_id] = calculate_node_score(carbon_intensity, vram_gb)
-    
+        d_km = haversine_distance(server_location[0], server_location[1],
+                                  peers_locations[peer_id][0], peers_locations[peer_id][1])
+        node_scores[peer_id] = calculate_node_score(carbon_intensity, vram_gb, d_km)
     # Sort peers by node score (ascending - prefer lower emissions and higher VRAM)
     sorted_candidates = sorted(node_scores.items(), key=lambda x: x[1])
     # print(f"📊 Peer scores (lower is better): {[(pid, f'{score:.3f}') for pid, score in sorted_candidates[:5]]}")
