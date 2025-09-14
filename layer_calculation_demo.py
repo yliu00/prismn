@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Demo script showing how to calculate layer distribution across GPU peers.
+Demo: compare a baseline (VRAM-only) plan vs an improved (Carbon + Travel) plan.
 
-This script demonstrates:
-1. How to calculate VRAM per layer for a model
-2. How many layers can fit in a specific peer
-3. How to distribute layers optimally across multiple peers
+This version prints non-technical, business-readable summaries:
+- Executive Summary with key improvements
+- Side-by-side comparison table
+- Short explanations of "why" the improved plan chose certain machines
 """
 
 import asyncio
@@ -17,190 +17,156 @@ from src.utils.model_utils import (
     optimized_distribute_layers_across_peers,
 )
 
-async def demo_layer_calculations():
-    """Demonstrate layer calculation functionality"""
-    print("🚀 Layer Calculation Demo")
-    print("=" * 50)
+# Toggle to show or hide low-level capacity prints
+VERBOSE = False
 
-    # Example: Llama-2-7B model
-    model_id = "meta-llama/Llama-3.2-1B" #"meta-llama/Llama-2-70b-hf"
-    qbits = 16  # FP16 quantization
+def _pct_change(old: float, new: float) -> float:
+    return 0.0 if old == 0 else ((old - new) / old) * 100.0
+
+def _print_hr():
+    print("-" * 69)
+
+def _print_exec_summary(baseline, improved, preference):
+    b = baseline["optimization_info"]
+    i = improved["optimization_info"]
+    carbon_drop = b["avg_carbon_intensity"] - i["avg_carbon_intensity"]
+    dist_drop = b["tour_distance_km"] - i["tour_distance_km"]
+    carbon_pct = _pct_change(b["avg_carbon_intensity"], i["avg_carbon_intensity"])
+    dist_pct = _pct_change(b["tour_distance_km"], i["tour_distance_km"])
+
+    print("\n📣 EXECUTIVE SUMMARY")
+    _print_hr()
+    print(f"• Lower emissions: -{carbon_drop:.1f} gCO₂/kWh  ({carbon_pct:.1f}% improvement)")
+    print(f"• Less inter-machine travel: -{dist_drop:.1f} km  ({dist_pct:.1f}% improvement)")
+    if preference == "Low Latency":
+        print("• We prioritized lower latency between machines while still fitting the model in memory and keeping emissions low.")
+    else:
+        print("• We prioritized lower carbon emissions while still fitting the model in memory and keeping data hops short.")
+
+def _print_side_by_side(baseline, improved):
+    b = baseline["optimization_info"]
+    i = improved["optimization_info"]
+
+    print("\n📊 SIDE-BY-SIDE COMPARISON")
+    _print_hr()
+    print(f"{'Metric':20s} {'Baseline (VRAM only)':>15s}   {'Improved (Prism)':>20s}")
+    _print_hr()
+    print(f"{'Machines used':25s} {str(len(baseline['distribution'])):>15s}   {str(len(improved['distribution'])):>20s}")
+    print(f"{'Can fit entire model':25s} {str(baseline['can_fit_model']):>15s}   {str(improved['can_fit_model']):>20s}")
+    print(f"{'Avg grid emissions (gCO₂/kWh)':5s} {b['avg_carbon_intensity']:>10.1f}   {i['avg_carbon_intensity']:>20.1f}")
+    print(f"{'Total data travel (km)':25s} {b['tour_distance_km']:>15.1f}   {i['tour_distance_km']:>20.1f}")
+    print(f"{'Selected machines':25s} {', '.join(b['selected_peers'])[:60]:>15s}   {', '.join(i['selected_peers'])[:60]:>20s}")
+    _print_hr()
+
+def _print_why_different(baseline, improved, peers_vram, peers_ci):
+    b_set = set(baseline["optimization_info"]["selected_peers"])
+    i_set = set(improved["optimization_info"]["selected_peers"])
+    only_b = sorted(b_set - i_set)
+    only_i = sorted(i_set - b_set)
+
+    print("\n🔍 WHAT CHANGED AND WHY")
+    _print_hr()
+    if only_b or only_i:
+        if only_b:
+            print("Machines dropped in the improved plan:")
+            for pid in only_b:
+                print(f"  - {pid}  (grid: {peers_ci.get(pid, 'n/a')} gCO₂/kWh, free VRAM: {peers_vram.get(pid, 'n/a')} GB)")
+        if only_i:
+            print("New machines added in the improved plan:")
+            for pid in only_i:
+                print(f"  + {pid}  (cleaner grid: {peers_ci.get(pid, 'n/a')} gCO₂/kWh, free VRAM: {peers_vram.get(pid, 'n/a')} GB)")
+    else:
+        print("Same set of machines, reordered to shorten data travel.")
+
+async def demo_layer_calculations(preference=None):
+    print("🚀 Layer Distribution Demo")
+    _print_hr()
+
+    model_id = "meta-llama/Llama-3.2-1B"
+    qbits = 16
 
     try:
-        # 1. Download model configuration
-        print(f"📥 Downloading config for {model_id}...")
+        print(f"Fetching model details for {model_id} ...")
         config = await download_config(model_id)
-        print(f"✅ Model has {config.get('num_hidden_layers')} layers")
+        print(f"Model layers: {config.get('num_hidden_layers')}")
 
-        # 2. Calculate VRAM per layer
-        print(f"\n🔢 Calculating VRAM requirements ({qbits}-bit)...")
         vram_per_layer, embedding_vram, total_vram = estimate_layer_vram(config, qbits)
-        print(f"   VRAM per layer: {vram_per_layer:.3f} GB")
-        print(f"   Embedding VRAM: {embedding_vram:.3f} GB")
-        print(f"   Total model VRAM: {total_vram:.3f} GB")
+        print(f"Approximate memory per layer: {vram_per_layer:.3f} GB  •  Embeddings: {embedding_vram:.3f} GB  •  Total: {total_vram:.3f} GB")
 
-        # Small capacities force multiple peers to be picked
-        example_peers = {
-            "peer_green_1": 1.4,   # low CI
-            "peer_green_2": 1.3,   # low CI
-            "peer_mid_1":   0.7,   # mid CI
-            "peer_brown_1": 1.6,   # high CI
+        # --- Demo peers (as provided) ---
+        """peers_info_demo = {
+            "peer_oslo_3060":   {"free_vram_gb": 0.164, "lat": 59.9139, "lon": 10.7522, "carbon_intensity_g_per_kwh": 18.0},
+            "peer_paris_a6000": {"free_vram_gb": 0.625, "lat": 48.8566, "lon": 2.3522,  "carbon_intensity_g_per_kwh": 44.0},
+            "peer_stockholm_4090": {"free_vram_gb": 0.362,"lat": 59.3293,"lon": 18.0686,"carbon_intensity_g_per_kwh": 19.0},
+            "peer_berlin_3080": {"free_vram_gb":  0.132, "lat": 52.5200, "lon": 13.4050, "carbon_intensity_g_per_kwh": 419.0},
+            "peer_warsaw_t4x2": {"free_vram_gb": 0.428, "lat": 52.2297, "lon": 21.0122, "carbon_intensity_g_per_kwh": 692.0},
+            "peer_saopaulo_a100": {"free_vram_gb": 1.217,"lat": -23.5505,"lon": -46.6333,"carbon_intensity_g_per_kwh": 97.0},
+            "peer_sfo_v100":    {"free_vram_gb": 0.493, "lat": 37.7749, "lon": -122.4194,"carbon_intensity_g_per_kwh": 384.0},
+            "peer_sydney_h100": {"free_vram_gb": 1.250, "lat": -33.8688,"lon": 151.2093, "carbon_intensity_g_per_kwh": 626.0},
+            "peer_delhi_3070":  {"free_vram_gb":  0.099, "lat": 28.6139, "lon": 77.2090, "carbon_intensity_g_per_kwh": 632.0},
+            "peer_shanghai_a10":{"free_vram_gb": 0.329, "lat": 31.2304, "lon": 121.4737,"carbon_intensity_g_per_kwh": 560.0},
         }
+        """
+        peers_info_demo = {
+    "peer_oslo_3060":      {"free_vram_gb": 0.35, "lat": 59.9139,  "lon": 10.7522,   "carbon_intensity_g_per_kwh": 18.0},
+    "peer_stockholm_4090": {"free_vram_gb": 0.85, "lat": 59.3293,  "lon": 18.0686,   "carbon_intensity_g_per_kwh": 19.0},
+    "peer_paris_a6000":    {"free_vram_gb": 1.10, "lat": 48.8566,  "lon": 2.3522,    "carbon_intensity_g_per_kwh": 44.0},
+    "peer_berlin_3080":    {"free_vram_gb": 0.25, "lat": 52.5200,  "lon": 13.4050,   "carbon_intensity_g_per_kwh": 419.0},
+    "peer_warsaw_t4x2":    {"free_vram_gb": 0.75, "lat": 52.2297,  "lon": 21.0122,   "carbon_intensity_g_per_kwh": 692.0},
+    "peer_saopaulo_a100":  {"free_vram_gb": 1.20, "lat": -23.5505, "lon": -46.6333,  "carbon_intensity_g_per_kwh": 97.0},
+    "peer_sfo_v100":       {"free_vram_gb": 0.80, "lat": 37.7749,  "lon": -122.4194, "carbon_intensity_g_per_kwh": 384.0},
+    "peer_sydney_h100":    {"free_vram_gb": 1.25, "lat": -33.8688, "lon": 151.2093,  "carbon_intensity_g_per_kwh": 626.0},
+    "peer_delhi_3070":     {"free_vram_gb": 0.20, "lat": 28.6139,  "lon": 77.2090,   "carbon_intensity_g_per_kwh": 632.0},
+    "peer_shanghai_a10":   {"free_vram_gb": 0.45, "lat": 31.2304,  "lon": 121.4737,  "carbon_intensity_g_per_kwh": 560.0},
+    "peer_london_3090":    {"free_vram_gb": 0.60, "lat": 51.5074,  "lon": -0.1278,   "carbon_intensity_g_per_kwh": 215.0},
+    "peer_madrid_3080":    {"free_vram_gb": 0.40, "lat": 40.4168,  "lon": -3.7038,   "carbon_intensity_g_per_kwh": 230.0},
+    "peer_toronto_a5000":  {"free_vram_gb": 0.95, "lat": 43.6532,  "lon": -79.3832,  "carbon_intensity_g_per_kwh": 120.0},
+    "peer_tokyo_a10g":     {"free_vram_gb": 0.55, "lat": 35.6762,  "lon": 139.6503,  "carbon_intensity_g_per_kwh": 430.0},
+    "peer_cape_town_3070": {"free_vram_gb": 0.30, "lat": -33.9249, "lon": 18.4241,   "carbon_intensity_g_per_kwh": 820.0},
+}
 
-        example_carbon_intensity = {
-            "peer_green_1": 120.0,  # e.g., hydro-heavy grid
-            "peer_green_2": 140.0,
-            "peer_mid_1":   300.0,
-            "peer_brown_1": 480.0,
-        }
 
-        example_locations = {
-            "peer_green_1": (64.1265, -21.8174),  # Reykjavik
-            "peer_green_2": (59.9139, 10.7522),   # Oslo
-            "peer_mid_1":   (52.5200, 13.4050),   # Berlin
-            "peer_brown_1": (39.0997, -94.5786),  # Kansas City
-        }
+        server_location = (42.3601, -71.0589) # MIT
 
+        example_peers = {pid: info["free_vram_gb"] for pid, info in peers_info_demo.items()}
+        example_locations = {pid: (info["lat"], info["lon"]) for pid, info in peers_info_demo.items()}
+        example_carbon = {pid: info["carbon_intensity_g_per_kwh"] for pid, info in peers_info_demo.items()}
 
-        print("\n🖥️  Example GPU Peers:")
-        for peer_id, vram in example_peers.items():
-            print(f"   {peer_id}: {vram} GB free VRAM")
+        if VERBOSE:
+            print("\n🖥️ Machines & available memory (GB):")
+            for pid, v in example_peers.items():
+                print(f"  {pid}: {v:.1f} GB")
 
-        # 4. Calculate capacity for each peer individually
-        print("\n📊 Individual Peer Capacities:")
-        for peer_id, available_vram in example_peers.items():
-            calculation = calculate_max_layers_for_peer(config, available_vram, qbits)
-            print(f"\n   {peer_id} ({available_vram} GB free):")
-            print(f"      Max layers (layers only): {calculation['max_layers_only']}")
-            print(
-                f"      Max layers (with embeddings): {calculation['max_layers_with_embeddings']}"
-            )
-            print(
-                f"      VRAM utilization: {calculation['vram_used_layers_only']:.2f} GB"
-            )
-
-        # 5. Compare VRAM-only vs Optimized approaches
-        print("\n🔄 Comparing Distribution Approaches:")
-        print("=" * 50)
-        
-        # VRAM-only approach (old method - simulate by using same carbon/location for all)
-        print("\n📊 VRAM-Only Approach (Traditional):")
-
-        vram_only_distribution = distribute_layers_across_peers(
-            config, example_peers, example_carbon_intensity, example_locations, qbits
+        print("\nCalculating max layers per machine...")
+        print(f"{'='*20}Baseline: VRAM-only{'='*20}")
+        # --- Baseline: VRAM-only ---
+        baseline = distribute_layers_across_peers(
+            config, example_peers, example_carbon, example_locations, qbits
         )
-        
-        print(f"   Selected peers: {vram_only_distribution['optimization_info']['selected_peers']}")
-        print(f"   Peer order: {' → '.join(vram_only_distribution['optimization_info']['ordered_peers'])}")
-        print(f"   Average carbon intensity: {vram_only_distribution['optimization_info']['avg_carbon_intensity']} gCO2/kWh")
-        print(f"   Travel distance: {vram_only_distribution['optimization_info']['tour_distance_km']} km")
-        
-        # Optimized approach (new method)
-        print("\n🌱 Optimized Approach (Carbon + Travel Distance):")
-        optimized_distribution = optimized_distribute_layers_across_peers(
-            config, example_peers, example_carbon_intensity, example_locations, qbits
+
+        print(f"\n{'='*20}Improved: Carbon + Travel{'='*20}")
+        # --- Improved: Carbon + Travel ---
+        improved = optimized_distribute_layers_across_peers(
+            config, example_peers, example_carbon, example_locations, qbits, server_location=server_location, preference=preference
         )
-        
-        print(f"   Selected peers: {optimized_distribution['optimization_info']['selected_peers']}")
-        print(f"   Peer order: {' → '.join(optimized_distribution['optimization_info']['ordered_peers'])}")
-        print(f"   Average carbon intensity: {optimized_distribution['optimization_info']['avg_carbon_intensity']} gCO2/kWh")
-        print(f"   Travel distance: {optimized_distribution['optimization_info']['tour_distance_km']} km")
-        
-        # Comparison summary
-        print("\n📈 Comparison Summary:")
-        carbon_improvement = vram_only_distribution['optimization_info']['avg_carbon_intensity'] - optimized_distribution['optimization_info']['avg_carbon_intensity']
-        distance_improvement = vram_only_distribution['optimization_info']['tour_distance_km'] - optimized_distribution['optimization_info']['tour_distance_km']
-        
-        print(f"   Carbon intensity improvement: {carbon_improvement:.1f} gCO2/kWh ({carbon_improvement/vram_only_distribution['optimization_info']['avg_carbon_intensity']*100:.1f}% reduction)")
-        print(f"   Travel distance improvement: {distance_improvement:.1f} km ({distance_improvement/vram_only_distribution['optimization_info']['tour_distance_km']*100:.1f}% reduction)")
-        
-        # Show peer selection differences
-        print("\n🔍 Peer Selection Analysis:")
-        vram_selected = set(vram_only_distribution['optimization_info']['selected_peers'])
-        opt_selected = set(optimized_distribution['optimization_info']['selected_peers'])
-        
-        if vram_selected != opt_selected:
-            print(f"   Different peer selection:")
-            print(f"   VRAM-only selected: {sorted(vram_selected)}")
-            print(f"   Optimized selected: {sorted(opt_selected)}")
-            print(f"   Peers only in VRAM approach: {sorted(vram_selected - opt_selected)}")
-            print(f"   Peers only in optimized approach: {sorted(opt_selected - vram_selected)}")
+
+        # --- Executive view: key outcomes ---
+        _print_exec_summary(baseline, improved, preference)
+        _print_side_by_side(baseline, improved)
+        _print_why_different(baseline, improved, example_peers, example_carbon)
+
+        # Optional: show the final detailed assignments (still readable)
+        print("\n📋 FINAL IMPROVED PLAN – MACHINE ASSIGNMENTS")
+        _print_hr()
+        for pid, a in improved["distribution"].items():
+            emb = " (stores model dictionary)" if a["handles_embeddings"] else ""
+            print(f"- {pid}{emb}: {a['assigned_layers']} layers  •  Utilization: {a['vram_utilization_percent']}%  •  Grid: {a['carbon_intensity']} gCO₂/kWh")
+
+        print("\nFinished. ")
+        if preference == "Low Latency":
+            print("The improved plan lowers latency between machines and reduces carbon emissions while keeping the model within memory limits.")
         else:
-            print(f"   Same peer selection: {sorted(vram_selected)}")
-            print(f"   But different ordering due to travel distance optimization")
-        
-        # Show why certain peers were preferred
-        print("\n💡 Why the optimized approach chose different peers:")
-        for peer_id in example_peers.keys():
-            if peer_id in example_carbon_intensity:
-                carbon = example_carbon_intensity[peer_id]
-                vram = example_peers[peer_id]
-                node_score = optimized_distribution['optimization_info']['node_scores'].get(peer_id, 'N/A')
-                selected_status = "✅" if peer_id in opt_selected else "❌"
-                print(f"   {peer_id}: {carbon} gCO2/kWh, {vram}GB VRAM, score: {node_score} {selected_status}")
-        
-        # Use the optimized distribution for detailed results
-        distribution = optimized_distribution
-
-        print(f"\n📋 Final Optimized Distribution Results:")
-        print(f"   Can fit entire model: {distribution['can_fit_model']}")
-        print(
-            f"   Total layers to distribute: {distribution['model_info']['total_layers']}"
-        )
-        print(
-            f"   Assigned layers: {distribution['model_info']['total_assigned_layers']}"
-        )
-        print(
-            f"   Utilized peers: {distribution['utilized_peers']}/{distribution['total_peers']}"
-        )
-
-        print("\n   Detailed Distribution:")
-        for peer_id, allocation in distribution["distribution"].items():
-            handles_emb = "✅" if allocation["handles_embeddings"] else "❌"
-            print(f"      {peer_id}:")
-            print(f"         Assigned layers: {allocation['assigned_layers']}")
-            print(f"         Handles embeddings: {handles_emb}")
-            print(f"         VRAM usage: {allocation['estimated_vram_usage']} GB")
-            print(f"         Utilization: {allocation['vram_utilization_percent']}%")
-            print(f"         Carbon intensity: {allocation['carbon_intensity']} gCO2/kWh")
-            print(f"         Location: {allocation['location']['lat']:.4f}, {allocation['location']['lon']:.4f}")
-        
-        # Show optimization results
-        if "optimization_info" in distribution:
-            opt_info = distribution["optimization_info"]
-            print(f"\n🌱 Optimization Results:")
-            print(f"   Average carbon intensity: {opt_info['avg_carbon_intensity']} gCO2/kWh")
-            print(f"   Total travel distance: {opt_info['tour_distance_km']} km")
-            print(f"   Optimized peer order: {' → '.join(opt_info['ordered_peers'])}")
-            print(f"   Node scores: {opt_info['node_scores']}")
-
-        # 6. Show what happens with insufficient VRAM
-        print("\n⚠️  Example: Insufficient VRAM scenario")
-        small_peers = {
-            "peer_small_1": 2.0,  # Only 2GB free VRAM
-            "peer_small_2": 3.0,  # Only 3GB free VRAM
-        }
-        
-        small_carbon_intensity = {
-            "peer_small_1": 400.0,
-            "peer_small_2": 400.0,
-        }
-        
-        small_locations = {
-            "peer_small_1": (42.3601, -71.0942),  # MIT
-            "peer_small_2": (42.3601, -71.0942),  # MIT
-        }
-
-        small_distribution = distribute_layers_across_peers(
-            config, small_peers, small_carbon_intensity, small_locations, qbits
-        )
-        print(
-            f"   Can fit model with small peers: {small_distribution['can_fit_model']}"
-        )
-        print(
-            f"   Remaining unassigned layers: {small_distribution['remaining_layers']}"
-        )
-
+            print("The improved plan lowers carbon emissions and reduces data travel while keeping the model within memory limits.")
         return True
 
     except Exception as e:
@@ -208,48 +174,7 @@ async def demo_layer_calculations():
         return False
 
 
-def demo_api_usage():
-    """Show example API calls for the new endpoints"""
-    print("\n📡 API Usage Examples:")
-    print("=" * 30)
-
-    print("1. Calculate layers for specific peer:")
-    print("""
-    POST /calculate_peer_layers
-    {
-        "model_id": "meta-llama/Llama-3.2-1B",
-        "hf_token": "your_token",
-        "qbits": 16,
-        "peer_id": "peer_rtx_4090",
-        "available_vram_gb": 22.0
-    }
-    """)
-
-    print("2. Get current peer capacity:")
-    print("""
-    GET /peer_layer_capacity/peer_rtx_4090?model_id=meta-llama/Llama-2-7b-hf&qbits=16
-    """)
-
-    print("3. Create distribution plan:")
-    print("""
-    POST /distribute_model_layers
-    {
-        "model_id": "meta-llama/Llama-2-7b-hf", 
-        "hf_token": "your_token",
-        "qbits": 16
-    }
-    """)
-
-
 if __name__ == "__main__":
-    print("🎮 Starting Layer Calculation Demo")
-
-    # Run the async demo
-    success = asyncio.run(demo_layer_calculations())
-
-    if success:
-        # Show API usage examples
-        # demo_api_usage()
-        print("\n✅ Demo completed successfully!")
-    else:
-        print("\n❌ Demo failed!")
+    print("🎮 Starting Layer Distribution Demo")
+    ok = asyncio.run(demo_layer_calculations("Low Carbon Emissions"))
+    print("\n✅ Demo completed successfully!" if ok else "\n❌ Demo failed!")
