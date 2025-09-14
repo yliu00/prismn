@@ -206,38 +206,6 @@ def show_main_window():
         for widget in scrollable_frame.winfo_children():
             widget.destroy()
 
-    # Remove duplicate add_output_line definition
-
-    def run_calculation():
-        preference = preference_var.get()
-        model_id = "meta-llama/Llama-3.2-1B"  # Default model
-        
-        # Clear previous results
-        clear_output()
-        
-        # Show loading message
-        add_output_line("🚀 Starting Layer Calculation Demo...", font_size=12, bold=True)
-        add_output_line(f"📥 Model: {model_id}", font_size=11)
-        add_output_line(f"🎯 Preference: {preference}", font_size=11)
-        add_output_line("=" * 60, font_size=10)
-        add_output_line("")  # Empty line
-        
-        # Run calculation in a separate thread to avoid blocking UI
-        def run_async_calculation():
-            try:
-                # Run the async calculation
-                result = asyncio.run(execute_layer_calculation(model_id))
-                
-                # Update UI in main thread
-                root.after(0, lambda: display_results(result))
-            except Exception as e:
-                root.after(0, lambda: display_error(str(e)))
-        
-        # Start calculation in background thread
-        calculation_thread = threading.Thread(target=run_async_calculation)
-        calculation_thread.daemon = True
-        calculation_thread.start()
-
     def display_results(result):
         if not result or not result.get('success', False):
             add_output_line("❌ Calculation failed!", font_size=12, color="red", bold=True)
