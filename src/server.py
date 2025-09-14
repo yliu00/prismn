@@ -547,6 +547,8 @@ async def distribute_model_layers(request: ModelEstimationRequest):
         # Get active peers and their VRAM availability
         active_peers = await get_active_peers()
         peers_vram = {}
+        peers_carbon_intensity = {}
+        peers_locations = {}
 
         for peer_id in active_peers:
             try:
@@ -560,6 +562,31 @@ async def distribute_model_layers(request: ModelEstimationRequest):
                 # Check if GPU metrics are available
                 if "total_free_vram_gb" in latest_metrics:
                     peers_vram[peer_id] = latest_metrics["total_free_vram_gb"]
+                    
+                    # Get peer location and carbon intensity from database
+                    peer_doc = await _db[PEERS_COLLECTION].find_one(
+                        {"peer_id": peer_id},
+                        {"_id": 0, "lat": 1, "lon": 1, "carbon_intensity": 1}
+                    )
+                    
+                    if peer_doc:
+                        # Use actual location if available
+                        if "lat" in peer_doc and "lon" in peer_doc:
+                            peers_locations[peer_id] = (peer_doc["lat"], peer_doc["lon"])
+                        else:
+                            # Default to MIT coordinates
+                            peers_locations[peer_id] = (42.3601, -71.0942)
+                        
+                        # Use actual carbon intensity if available, otherwise default
+                        if "carbon_intensity" in peer_doc:
+                            peers_carbon_intensity[peer_id] = peer_doc["carbon_intensity"]
+                        else:
+                            # Default carbon intensity (US average ~400 gCO2/kWh)
+                            peers_carbon_intensity[peer_id] = 400.0
+                    else:
+                        # Default values if peer not found in database
+                        peers_locations[peer_id] = (42.3601, -71.0942)
+                        peers_carbon_intensity[peer_id] = 400.0
 
             except Exception as e:
                 print(f"❌ Error processing peer {peer_id}: {e}")
@@ -571,7 +598,7 @@ async def distribute_model_layers(request: ModelEstimationRequest):
 
         # Create distribution plan
         distribution_plan = distribute_layers_across_peers(
-            config, peers_vram, request.qbits
+            config, peers_vram, peers_carbon_intensity, peers_locations, request.qbits
         )
 
         return {
