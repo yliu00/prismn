@@ -24,7 +24,7 @@ def _pct_change(old: float, new: float) -> float:
     return 0.0 if old == 0 else ((old - new) / old) * 100.0
 
 def _print_hr():
-    print("-" * 70)
+    print("-" * 69)
 
 def _print_exec_summary(baseline, improved, preference):
     b = baseline["optimization_info"]
@@ -49,13 +49,13 @@ def _print_side_by_side(baseline, improved):
 
     print("\n📊 SIDE-BY-SIDE COMPARISON")
     _print_hr()
-    print(f"{'Metric':35s} {'Baseline (VRAM only)':>22s}   {'Improved (Carbon + Travel)':>26s}")
+    print(f"{'Metric':20s} {'Baseline (VRAM only)':>15s}   {'Improved (Prism)':>20s}")
     _print_hr()
-    print(f"{'Machines used':35s} {str(len(baseline['distribution'])):>22s}   {str(len(improved['distribution'])):>26s}")
-    print(f"{'Can fit entire model':35s} {str(baseline['can_fit_model']):>22s}   {str(improved['can_fit_model']):>26s}")
-    print(f"{'Avg grid emissions (gCO₂/kWh)':35s} {b['avg_carbon_intensity']:>22.1f}   {i['avg_carbon_intensity']:>26.1f}")
-    print(f"{'Total data travel (km)':35s} {b['tour_distance_km']:>22.1f}   {i['tour_distance_km']:>26.1f}")
-    print(f"{'Selected machines':35s} {', '.join(b['selected_peers'])[:60]:>22s}   {', '.join(i['selected_peers'])[:60]:>26s}")
+    print(f"{'Machines used':25s} {str(len(baseline['distribution'])):>15s}   {str(len(improved['distribution'])):>20s}")
+    print(f"{'Can fit entire model':25s} {str(baseline['can_fit_model']):>15s}   {str(improved['can_fit_model']):>20s}")
+    print(f"{'Avg grid emissions (gCO₂/kWh)':5s} {b['avg_carbon_intensity']:>10.1f}   {i['avg_carbon_intensity']:>20.1f}")
+    print(f"{'Total data travel (km)':25s} {b['tour_distance_km']:>15.1f}   {i['tour_distance_km']:>20.1f}")
+    print(f"{'Selected machines':25s} {', '.join(b['selected_peers'])[:60]:>15s}   {', '.join(i['selected_peers'])[:60]:>20s}")
     _print_hr()
 
 def _print_why_different(baseline, improved, peers_vram, peers_ci):

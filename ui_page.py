@@ -35,7 +35,7 @@ def show_main_window():
     # Your main window code here
     root = tk.Tk()
     root.geometry("800x600")
-    root.title("Prism VLLM Layer Calculation Tool")
+    root.title("Prism VLLM Layer Router Tool")
     
     # Center the window on screen
     root.update_idletasks()
@@ -97,7 +97,7 @@ def show_main_window():
     label.pack(side="left", padx=15, pady=10)
 
     # Create dropdown for preference selection
-    preference_var = tk.StringVar(value="Low Latency")
+    preference_var = tk.StringVar(value="Low Carbon Emissions")
     preference_dropdown = ttk.Combobox(pref_box, textvariable=preference_var, 
                                       values=["Low Latency", "Low Carbon Emissions"], 
                                       state="readonly", width=15, font=("Consolas", 11))
@@ -171,7 +171,7 @@ def show_main_window():
         preference = preference_var.get()
         model_id = "meta-llama/Llama-3.2-1B"
         clear_output()
-        add_output_line("🚀 Starting Layer Calculation Demo...", font_size=12, bold=True)
+        add_output_line("🚀 Starting Layer Router Demo...", font_size=12, bold=True)
         add_output_line(f"📥 Model: {model_id}", font_size=12)
         add_output_line(f"🎯 Preference: {preference}", font_size=12)
         add_output_line("=" * 60, font_size=10)
@@ -268,7 +268,7 @@ def show_main_window():
     canvas.bind_all("<MouseWheel>", _on_mousewheel)
     
     # Add initial welcome message
-    add_output_line("🚀 Prism VLLM Layer Calculation Tool", font_size=14, bold=True)
+    add_output_line("🚀 Prism VLLM Layer Router Tool", font_size=14, bold=True)
     add_output_line("=" * 50, font_size=10)
     add_output_line("")
     add_output_line("Select your preference above and click 'Run Calculation' to begin.", font_size=11)
