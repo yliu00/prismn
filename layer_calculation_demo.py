@@ -14,6 +14,7 @@ from src.utils.model_utils import (
     estimate_layer_vram,
     calculate_max_layers_for_peer,
     distribute_layers_across_peers,
+    optimized_distribute_layers_across_peers,
 )
 
 async def demo_layer_calculations():
@@ -84,11 +85,9 @@ async def demo_layer_calculations():
         
         # VRAM-only approach (old method - simulate by using same carbon/location for all)
         print("\n📊 VRAM-Only Approach (Traditional):")
-        vram_only_carbon = {peer_id: 400.0 for peer_id in example_peers.keys()}  # Same carbon for all
-        vram_only_locations = {peer_id: (42.3601, -71.0942) for peer_id in example_peers.keys()}  # Same location for all
-        
+
         vram_only_distribution = distribute_layers_across_peers(
-            config, example_peers, vram_only_carbon, vram_only_locations, qbits
+            config, example_peers, example_carbon_intensity, example_locations, qbits
         )
         
         print(f"   Selected peers: {vram_only_distribution['optimization_info']['selected_peers']}")
@@ -98,7 +97,7 @@ async def demo_layer_calculations():
         
         # Optimized approach (new method)
         print("\n🌱 Optimized Approach (Carbon + Travel Distance):")
-        optimized_distribution = distribute_layers_across_peers(
+        optimized_distribution = optimized_distribute_layers_across_peers(
             config, example_peers, example_carbon_intensity, example_locations, qbits
         )
         
