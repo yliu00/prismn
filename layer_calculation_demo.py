@@ -26,7 +26,7 @@ def _pct_change(old: float, new: float) -> float:
 def _print_hr():
     print("-" * 70)
 
-def _print_exec_summary(baseline, improved):
+def _print_exec_summary(baseline, improved, preference):
     b = baseline["optimization_info"]
     i = improved["optimization_info"]
     carbon_drop = b["avg_carbon_intensity"] - i["avg_carbon_intensity"]
@@ -38,7 +38,10 @@ def _print_exec_summary(baseline, improved):
     _print_hr()
     print(f"• Lower emissions: -{carbon_drop:.1f} gCO₂/kWh  ({carbon_pct:.1f}% improvement)")
     print(f"• Less inter-machine travel: -{dist_drop:.1f} km  ({dist_pct:.1f}% improvement)")
-    print("• We prioritized cleaner electricity while still fitting the model in memory and keeping data hops short.")
+    if preference == "Low Latency":
+        print("• We prioritized lower latency between machines while still fitting the model in memory and keeping emissions low.")
+    else:
+        print("• We prioritized lower carbon emissions while still fitting the model in memory and keeping data hops short.")
 
 def _print_side_by_side(baseline, improved):
     b = baseline["optimization_info"]
@@ -102,7 +105,8 @@ async def demo_layer_calculations(preference=None):
             "peer_sydney_h100": {"free_vram_gb": 1.250, "lat": -33.8688,"lon": 151.2093, "carbon_intensity_g_per_kwh": 626.0},
             "peer_delhi_3070":  {"free_vram_gb":  0.099, "lat": 28.6139, "lon": 77.2090, "carbon_intensity_g_per_kwh": 632.0},
             "peer_shanghai_a10":{"free_vram_gb": 0.329, "lat": 31.2304, "lon": 121.4737,"carbon_intensity_g_per_kwh": 560.0},
-        }"""
+        }
+        """
         peers_info_demo = {
     "peer_oslo_3060":      {"free_vram_gb": 0.35, "lat": 59.9139,  "lon": 10.7522,   "carbon_intensity_g_per_kwh": 18.0},
     "peer_stockholm_4090": {"free_vram_gb": 0.85, "lat": 59.3293,  "lon": 18.0686,   "carbon_intensity_g_per_kwh": 19.0},
@@ -124,8 +128,6 @@ async def demo_layer_calculations(preference=None):
 
         server_location = (42.3601, -71.0589) # MIT
 
-        # NOTE: your original sample overwrote VRAMs with tiny decimals.
-        # For a realistic, non-technical demo, we’ll use the "free_vram_gb" values above.
         example_peers = {pid: info["free_vram_gb"] for pid, info in peers_info_demo.items()}
         example_locations = {pid: (info["lat"], info["lon"]) for pid, info in peers_info_demo.items()}
         example_carbon = {pid: info["carbon_intensity_g_per_kwh"] for pid, info in peers_info_demo.items()}
@@ -149,7 +151,7 @@ async def demo_layer_calculations(preference=None):
         )
 
         # --- Executive view: key outcomes ---
-        _print_exec_summary(baseline, improved)
+        _print_exec_summary(baseline, improved, preference)
         _print_side_by_side(baseline, improved)
         _print_why_different(baseline, improved, example_peers, example_carbon)
 
@@ -160,7 +162,11 @@ async def demo_layer_calculations(preference=None):
             emb = " (stores model dictionary)" if a["handles_embeddings"] else ""
             print(f"- {pid}{emb}: {a['assigned_layers']} layers  •  Utilization: {a['vram_utilization_percent']}%  •  Grid: {a['carbon_intensity']} gCO₂/kWh")
 
-        print("\nDone. The improved plan lowers emissions exposure and reduces data travel while keeping the model within memory limits.")
+        print("\nFinished. ")
+        if preference == "Low Latency":
+            print("The improved plan lowers latency between machines and reduces carbon emissions while keeping the model within memory limits.")
+        else:
+            print("The improved plan lowers carbon emissions and reduces data travel while keeping the model within memory limits.")
         return True
 
     except Exception as e:
@@ -170,5 +176,5 @@ async def demo_layer_calculations(preference=None):
 
 if __name__ == "__main__":
     print("🎮 Starting Layer Distribution Demo")
-    ok = asyncio.run(demo_layer_calculations())
+    ok = asyncio.run(demo_layer_calculations("Low Carbon Emissions"))
     print("\n✅ Demo completed successfully!" if ok else "\n❌ Demo failed!")

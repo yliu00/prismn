@@ -59,9 +59,9 @@ def calculate_node_score(carbon_intensity: float,
     weight_vram = 0.2
     weight_distance = 0.1
     if preference == "Low Latency":
-        weight_carbon = 0.3
+        weight_carbon = 0.1
         weight_vram = 0.2
-        weight_distance = 0.5
+        weight_distance = 0.7
 
     # Normalize carbon intensity (assume range 0-1000 gCO2/kWh, lower is better)
     carbon_score = carbon_intensity / carbon_max
