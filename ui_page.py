@@ -3,6 +3,7 @@ from tkinter import ttk
 import asyncio
 import threading
 import io
+import re
 from contextlib import redirect_stdout
 from layer_calculation_demo import demo_layer_calculations
 
@@ -35,7 +36,7 @@ def show_main_window():
     # Your main window code here
     root = tk.Tk()
     root.geometry("800x600")
-    root.title("Prism VLLM Layer Router Tool")
+    root.title("Prismn VLLM Layer Router Tool")
     
     # Center the window on screen
     root.update_idletasks()
@@ -122,6 +123,9 @@ def show_main_window():
             widget.destroy()
 
     def add_output_line(text, font_size=10, color="#ff8c42", bold=False):
+        emoji_pattern = re.compile(r'^[\U0001F300-\U0001FAFF\U00002700-\U000027BF\U0001F600-\U0001F64F\U0001F680-\U0001F6FF\U0001F700-\U0001F77F\U0001F780-\U0001F7FF\U0001F800-\U0001F8FF\U0001F900-\U0001F9FF\U0001FA00-\U0001FA6F\U0001FA70-\U0001FAFF]')
+        if emoji_pattern.match(text):
+            color = "#00bfff"  # Or any color you prefer for emoji lines
         font_weight = "bold" if bold else "normal"
         
         # Calculate dynamic wrap length based on window size
@@ -281,7 +285,7 @@ def show_main_window():
     canvas.bind_all("<MouseWheel>", _on_mousewheel)
     
     # Add initial welcome message
-    add_output_line("🚀 Prism VLLM Layer Router Tool", font_size=14, bold=True)
+    add_output_line("🚀 Prismn VLLM Layer Router Tool", font_size=14, bold=True)
     add_output_line("=" * 50, font_size=10)
     add_output_line("")
     add_output_line("Select your preference above and click 'Run Calculation' to begin.", font_size=11)
@@ -339,7 +343,7 @@ def show_main_window():
 
 splash_root = tk.Tk()
 splash_root.geometry("900x600")
-splash_root.title("Prism VLLM")
+splash_root.title("Prismn VLLM")
 splash_root.configure(bg='#f5f0e8')  # Light beige background
 
 # Create main content frame with dark background
@@ -357,8 +361,8 @@ top_box.pack(fill='x')
 center_frame = tk.Frame(content_frame, bg='#282828')
 center_frame.pack(expand=True, fill='both', padx=20, pady=20)
 
-# Create blocky "WELCOME TO PRISM VLLM" text
-title_text = "WELCOME TO\nPRISM VLLM"
+# Create blocky "WELCOME TO PRISMN" text
+title_text = "WELCOME TO PRISMN"
 title_label = tk.Label(center_frame, text=title_text, 
                       fg='#ff8c42', bg='#282828', 
                       font=("Consolas", 24, "bold"), 
