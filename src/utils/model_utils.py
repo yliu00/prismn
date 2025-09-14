@@ -553,7 +553,7 @@ def distribute_layers_across_peers(
     seq_length: int = 2048,
 ) -> Dict[str, Any]:
     """
-    Distribute model layers optimally across multiple GPU peers.
+    Distribute model layers across multiple GPU peers by VRAM only (capacity balancing).
     Uses balanced distribution to achieve similar VRAM utilization percentage across all peers.
 
     Args:
@@ -567,12 +567,13 @@ def distribute_layers_across_peers(
     Returns:
         Dictionary containing the distribution plan
     """
+    tour_distance = 0.0
     total_layers = config.get("num_hidden_layers")
     vram_per_layer_gb, embedding_vram_gb, total_model_vram_gb = estimate_layer_vram(
         config, q_bits, batch_size, seq_length, include_kv_cache=False
     )
     print(
-        f"🔍 Model {config.get('model_name')} has {total_layers} layers and requires {total_model_vram_gb} GB of VRAM"
+        f"🔍 Model {config.get('model_name')} has {total_layers} layers and requires {total_model_vram_gb:.2f} GB of VRAM"
     )
 
     # Calculate effective VRAM for each peer (with safety margin)
@@ -734,24 +735,24 @@ def distribute_layers_across_peers(
     )
     can_fit_model = total_assigned_layers >= total_layers and embedding_assigned
 
-    tour = [peer_id for peer_id in distribution.keys()]
-    
-    # Calculate average carbon intensity of selected peers
-    avg_carbon_intensity = sum(peers_carbon_intensity[pid] for pid in tour) / len(tour)
-
-    coords = [(peer_id, peers_locations[peer_id][0], peers_locations[peer_id][1]) 
-                for peer_id in tour]
-    coords_dict = {peer_id: (lat, lon) for peer_id, lat, lon in coords}
-    tour_distance = calculate_tour_distance(tour, coords_dict)
+    # Summary metrics for the baseline (used in side-by-side comparison)
+    tour = list(distribution.keys())
+    avg_carbon_intensity = (sum(peers_carbon_intensity[pid] for pid in tour) / len(tour)) if tour else 0.0
+    coords_dict = {pid: peers_locations[pid] for pid in tour if pid in peers_locations} 
+    tour_distance = calculate_tour_distance(tour, coords_dict) if len(tour) > 1 else 0.0
 
     # Print distribution summary
-    print("\n📊 Layer Distribution Summary:")
-    print(f"🌱 Average carbon intensity: {avg_carbon_intensity:.1f} gCO2/kWh")
-    print(f"📏 Total travel distance: {tour_distance:.1f} km")
+    print("\n📊 Layer Distribution Summary (Traditional):")
+    print(f"• Machines used: {len(distribution)}")
+    print(f"• Total capacity: {total_capacity:.2f}GB")
+    print(f"• Average local grid emissions: {avg_carbon_intensity:.1f} gCO₂/kWh")
+    print(f"• Approx. total data travel between machines: {tour_distance:.1f} km")
+    print("• Layers placed across machines to fit available memory:")
+
     for peer_id, info in distribution.items():
         print(
             f"   {peer_id}: {info['assigned_layers']} layers, "
-            f"{info['vram_utilization_percent']:.1f}% VRAM utilization"
+            f"{info['vram_utilization_percent']:.1f}% VRAM utilization, "
             f"{peers_carbon_intensity[peer_id]:.1f} gCO2/kWh"
             f"{' (+ embeddings)' if info['handles_embeddings'] else ''}"
         )
@@ -809,12 +810,13 @@ def optimized_distribute_layers_across_peers(
     Returns:
         Dictionary containing the distribution plan with optimized peer ordering
     """
+    tour_distance = 0.0
     total_layers = config.get("num_hidden_layers")
     vram_per_layer_gb, embedding_vram_gb, total_model_vram_gb = estimate_layer_vram(
         config, q_bits, batch_size, seq_length, include_kv_cache=False
     )
     print(
-        f"🔍 Model {config.get('model_name')} has {total_layers} layers and requires {total_model_vram_gb} GB of VRAM"
+        f"🔍 Model {config.get('model_name')} has {total_layers} layers and requires {total_model_vram_gb:.2f} GB of VRAM"
     )
 
     # ============================================================================
@@ -830,7 +832,7 @@ def optimized_distribute_layers_across_peers(
     if not candidate_peers:
         raise ValueError("No suitable peers found with VRAM, carbon intensity, and location data")
     
-    print(f"🌍 Found {len(candidate_peers)} candidate peers with complete data")
+    # print(f"🌍 Found {len(candidate_peers)} candidate peers with complete data")
     
     # Calculate node scores (lower is better)
     node_scores = {}
@@ -841,7 +843,7 @@ def optimized_distribute_layers_across_peers(
     
     # Sort peers by node score (ascending - prefer lower emissions and higher VRAM)
     sorted_candidates = sorted(node_scores.items(), key=lambda x: x[1])
-    print(f"📊 Peer scores (lower is better): {[(pid, f'{score:.3f}') for pid, score in sorted_candidates[:5]]}")
+    # print(f"📊 Peer scores (lower is better): {[(pid, f'{score:.3f}') for pid, score in sorted_candidates[:5]]}")
     
     # Calculate effective VRAM for each peer (with safety margin)
     effective_vram = {
@@ -860,8 +862,6 @@ def optimized_distribute_layers_across_peers(
         
         if total_capacity >= required_vram:
             break
-    
-    print(f"✅ Selected {len(selected_peers)} peers with {total_capacity:.2f}GB total capacity")
     
     # ============================================================================
     # B. ORDER PEERS TO MINIMIZE TRAVEL
@@ -892,7 +892,6 @@ def optimized_distribute_layers_across_peers(
         # Calculate tour distance
         tour_distance = calculate_tour_distance(optimized_tour, coords_dict)
         print(f"🗺️ Optimized peer order: {' → '.join(optimized_tour)}")
-        print(f"📏 Total travel distance: {tour_distance:.1f} km")
         
         # Use optimized order for layer distribution
         ordered_peers = optimized_tour
@@ -992,8 +991,13 @@ def optimized_distribute_layers_across_peers(
     avg_carbon_intensity = sum(peers_carbon_intensity[pid] for pid in selected_peers) / len(selected_peers)
     
     # Print distribution summary
-    print("\n📊 Optimized Layer Distribution Summary:")
-    print(f"🌱 Average carbon intensity: {avg_carbon_intensity:.1f} gCO2/kWh")
+    print("\n📊 Layer Distribution Summary (Optimized):")
+    print(f"• Machines used: {len(selected_peers)}")
+    print(f"• Total capacity: {total_capacity:.2f}GB")
+    print(f"• Average local grid emissions: {avg_carbon_intensity:.1f} gCO₂/kWh")
+    print(f"• Approx. total data travel between machines: {tour_distance:.1f} km")
+    print("• Layers placed across machines to fit available memory:")
+    
     for peer_id, info in distribution.items():
         print(
             f"   {peer_id}: {info['assigned_layers']} layers, "
