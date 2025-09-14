@@ -6,7 +6,6 @@ import io
 from contextlib import redirect_stdout
 from layer_calculation_demo import demo_layer_calculations
 
-
 async def execute_layer_calculation(model_id, preference):
     """Execute the layer calculation demo and capture its output"""
     try:
@@ -352,17 +351,6 @@ title_label = tk.Label(center_frame, text=title_text,
                       font=("Consolas", 24, "bold"), 
                       justify='center')
 title_label.pack(expand=True)
-
-# Bottom status message
-bottom_frame = tk.Frame(content_frame, bg='#282828')
-bottom_frame.pack(fill='x', padx=20, pady=(20, 30))
-
-# Bind Enter key to continue
-def on_enter(event):
-    show_main_window()
-
-splash_root.bind('<Return>', on_enter)
-splash_root.focus_set()
 
 # Show main window after 2 seconds
 splash_root.after(2000, show_main_window)
