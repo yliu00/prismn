@@ -2,7 +2,6 @@ import tkinter as tk
 from tkinter import ttk
 import asyncio
 import threading
-import sys
 import io
 from contextlib import redirect_stdout
 from layer_calculation_demo import demo_layer_calculations
@@ -37,7 +36,7 @@ def show_main_window():
     # Your main window code here
     root = tk.Tk()
     root.geometry("800x600")
-    root.title("Prism VLLM Layer Calculation Output")
+    root.title("Prism VLLM Layer Calculation Tool")
     
     # Center the window on screen
     root.update_idletasks()
@@ -72,38 +71,142 @@ def show_main_window():
     root.bind('<F11>', toggle_fullscreen)
     root.bind('<Escape>', lambda e: root.attributes('-fullscreen', False))
 
+    # Set main window background
+    root.configure(bg='#282828')
+
+    # Create a frame for the scrollable content
+    main_frame = tk.Frame(root, bg='#282828')
+    main_frame.pack(expand=True, fill="both", padx=20, pady=20)
+
+    # Create main content frame with dark background
+    content_frame = tk.Frame(main_frame, bg='#282828', relief='solid', bd=2)
+    content_frame.pack(expand=True, fill="both")
+
     # Row for label and entry
-    top_row = tk.Frame(root, bg='#dec39b')
-    top_row.pack(fill="x", pady=10)
+    top_row = tk.Frame(content_frame, bg='#282828')
+    top_row.pack(fill="x", padx=20, pady=20)
 
     # Center the content
-    center_frame = tk.Frame(top_row, bg='#dec39b')
+    center_frame = tk.Frame(top_row, bg='#282828')
     center_frame.pack(expand=True)
 
-    label = tk.Label(center_frame, text="Choose Your Preference", fg="white", bg="#dec39b", anchor="w", font=("Helvetica", 14))
-    label.pack(side="left", padx=10)
+    # Create a bordered box for the preference selection
+    pref_box = tk.Frame(center_frame, bg='#282828', relief='solid', bd=1, highlightbackground='#ff8c42', highlightthickness=1)
+    pref_box.pack(fill='x', padx=10)
+
+    label = tk.Label(pref_box, text="* Choose Your Preference", fg="#ff8c42", bg='#282828', anchor="w", font=("Consolas", 12))
+    label.pack(side="left", padx=15, pady=10)
 
     # Create dropdown for preference selection
     preference_var = tk.StringVar(value="Low Latency")
-    preference_dropdown = ttk.Combobox(center_frame, textvariable=preference_var, 
-                                      values=["Low Latency", "Low Cost"], 
-                                      state="readonly", width=15, font=("Helvetica", 11))
-    preference_dropdown.pack(side="left", padx=10)
+    preference_dropdown = ttk.Combobox(pref_box, textvariable=preference_var, 
+                                      values=["Low Latency", "Low Carbon Emissions"], 
+                                      state="readonly", width=15, font=("Consolas", 11))
+    preference_dropdown.pack(side="right", padx=15, pady=10)
+
+    # Helper functions for output and calculation
+    def clear_output():
+        for widget in scrollable_frame.winfo_children():
+            widget.destroy()
+
+    def add_output_line(text, font_size=10, color="#ff8c42", bold=False):
+        font_weight = "bold" if bold else "normal"
+        
+        # Calculate dynamic wrap length based on window size
+        def get_wrap_length():
+            try:
+                # Get the current canvas width
+                canvas_width = canvas.winfo_width()
+                if canvas_width > 1:  # Make sure canvas is initialized
+                    # Use 80% of canvas width for text wrapping
+                    return int(canvas_width * 0.8)
+                else:
+                    # Fallback to a reasonable default
+                    return 800
+            except:
+                return 800
+        
+        # Create label with dynamic wrapping
+        label = tk.Label(scrollable_frame, text=text, 
+                        font=("Consolas", font_size, font_weight), 
+                        fg=color, bg="#282828", 
+                        anchor="w", justify="left", 
+                        wraplength=get_wrap_length())
+        label.pack(fill="x", padx=15, pady=3)
+        # Update wrapping when window is resized
+        def update_wrap(event=None):
+            try:
+                new_wrap = get_wrap_length()
+                label.configure(wraplength=new_wrap)
+            except:
+                pass
+        canvas.bind('<Configure>', update_wrap)
+        return label
+
+    def display_results(result):
+        if not result or not result.get('success', False):
+            add_output_line("❌ Calculation failed!", font_size=12, color="red", bold=True)
+            if result and 'output' in result:
+                lines = result['output'].split('\n')
+                for line in lines:
+                    if line.strip():
+                        add_output_line(line)
+            return
+        clear_output()
+        lines = result['output'].split('\n')
+        for line in lines:
+            if line.strip():
+                if line.startswith("🚀") or line.startswith("📥") or line.startswith("✅") or line.startswith("❌"):
+                    add_output_line(line, font_size=12, bold=True)
+                elif line.startswith("=") or line.startswith("-"):
+                    add_output_line(line, font_size=12)
+                elif line.startswith("   ") and not line.startswith("      "):
+                    add_output_line(line, font_size=12, bold=True)
+                else:
+                    add_output_line(line, font_size=12)
+
+    def display_error(error_msg):
+        add_output_line(f"❌ Error: {error_msg}", font_size=12, color="red", bold=True)
+
+    def run_calculation():
+        preference = preference_var.get()
+        model_id = "meta-llama/Llama-3.2-1B"
+        clear_output()
+        add_output_line("🚀 Starting Layer Calculation Demo...", font_size=12, bold=True)
+        add_output_line(f"📥 Model: {model_id}", font_size=12)
+        add_output_line(f"🎯 Preference: {preference}", font_size=12)
+        add_output_line("=" * 60, font_size=10)
+        add_output_line("")
+        def run_async_calculation():
+            try:
+                result = asyncio.run(execute_layer_calculation(model_id))
+                root.after(0, lambda: display_results(result))
+            except Exception as e:
+                root.after(0, lambda: display_error(str(e)))
+        calculation_thread = threading.Thread(target=run_async_calculation)
+        calculation_thread.daemon = True
+        calculation_thread.start()
+
+    # Create button row underneath, centered
+    button_frame = tk.Frame(center_frame, bg='#282828')
+    button_frame.pack(fill='x', padx=10, pady=(10, 0))
+    button_center = tk.Frame(button_frame, bg='#282828')
+    button_center.pack(expand=True)
+    run_button = tk.Button(button_center, text="▶ Run Calculation", command=run_calculation,
+                          fg="#ff8c42", bg='#282828', font=("Consolas", 11, "bold"),
+                          relief='solid', bd=1, highlightbackground='#ff8c42', highlightthickness=1)
+    run_button.pack(side="left", padx=(0, 10), pady=10)
+    quit_button = tk.Button(button_center, text="✖ Quit", command=root.destroy,
+                           fg="#ff8c42", bg='#282828', font=("Consolas", 11, "bold"),
+                           relief='solid', bd=1, highlightbackground='#ff8c42', highlightthickness=1)
+    quit_button.pack(side="left", padx=(10, 0), pady=10)
 
     def clear_output():
         """Clear all labels from the scrollable frame"""
         for widget in scrollable_frame.winfo_children():
             widget.destroy()
 
-    def add_output_line(text, font_size=10, color="black", bold=False):
-        """Add a new label to the output with consistent styling"""
-        font_weight = "bold" if bold else "normal"
-        
-        label = tk.Label(scrollable_frame, text=text, 
-                        font=("Helvetica", font_size, font_weight),
-                        fg=color, bg="#f5f0e8", anchor="w", justify="left")
-        label.pack(fill="x", padx=10, pady=2)
-        return label
+    # Remove duplicate add_output_line definition
 
     def run_calculation():
         preference = preference_var.get()
@@ -155,29 +258,30 @@ def show_main_window():
                 if line.startswith("🚀") or line.startswith("📥") or line.startswith("✅") or line.startswith("❌"):
                     add_output_line(line, font_size=11, bold=True)
                 elif line.startswith("=") or line.startswith("-"):
-                    add_output_line(line, font_size=10)
+                    add_output_line(line, font_size=11)
                 elif line.startswith("   ") and not line.startswith("      "):
-                    add_output_line(line, font_size=10, bold=True)
+                    add_output_line(line, font_size=11, bold=True)
                 else:
-                    add_output_line(line, font_size=10)
+                    add_output_line(line, font_size=11)
 
     def display_error(error_msg):
         add_output_line(f"❌ Error: {error_msg}", font_size=12, color="red", bold=True)
 
-    run_button = ttk.Button(root, text="Run", command=run_calculation)
-    run_button.pack(pady=10)
-
     # Set main window background
-    root.configure(bg='#dec39b')
+    root.configure(bg='#282828')
     
     # Create a frame for the scrollable content
-    main_frame = tk.Frame(root, bg='#dec39b')
-    main_frame.pack(expand=True, fill="both", padx=10, pady=10)
+    main_frame = tk.Frame(root, bg='#f5f0e8')
+    main_frame.pack(expand=True, fill="both", padx=20, pady=20)
+    
+    # Create main content frame with dark background
+    content_frame = tk.Frame(main_frame, bg='#282828', relief='solid', bd=2)
+    content_frame.pack(expand=True, fill="both")
     
     # Create a canvas and scrollbar for scrolling
-    canvas = tk.Canvas(main_frame, bg="#f5f0e8", highlightthickness=0)  # Lighter hue
-    scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
-    scrollable_frame = tk.Frame(canvas, bg="#f5f0e8")  # Lighter hue
+    canvas = tk.Canvas(content_frame, bg="#282828", highlightthickness=0)
+    scrollbar = ttk.Scrollbar(content_frame, orient="vertical", command=canvas.yview)
+    scrollable_frame = tk.Frame(canvas, bg="#282828")
     
     scrollable_frame.bind(
         "<Configure>",
@@ -187,13 +291,23 @@ def show_main_window():
     canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
     canvas.configure(yscrollcommand=scrollbar.set)
     
-    canvas.pack(side="left", fill="both", expand=True)
-    scrollbar.pack(side="right", fill="y")
+    # Pack canvas and scrollbar in the content frame
+    canvas.pack(side="left", fill="both", expand=True, padx=(20, 0), pady=(0, 20))
+    scrollbar.pack(side="right", fill="y", padx=(0, 20), pady=(0, 20))
     
     # Bind mousewheel to canvas
     def _on_mousewheel(event):
         canvas.yview_scroll(int(-1*(event.delta/120)), "units")
     canvas.bind_all("<MouseWheel>", _on_mousewheel)
+    
+    # Add initial welcome message
+    add_output_line("🚀 Prism VLLM Layer Calculation Tool", font_size=14, bold=True)
+    add_output_line("=" * 50, font_size=10)
+    add_output_line("")
+    add_output_line("Select your preference above and click 'Run Calculation' to begin.", font_size=11)
+    add_output_line("")
+    add_output_line("This tool will analyze your model and optimize layer distribution", font_size=11)
+    add_output_line("across available GPU peers for maximum efficiency.", font_size=11)
     
     # Update centering function to use the actual canvas
     def center_content():
@@ -214,18 +328,14 @@ def show_main_window():
         # Update the position of the scrollable frame
         canvas.coords(canvas.find_all()[0], x_offset, y_offset)
         
-        # Also center the main frame content
-        main_frame.update_idletasks()
-        main_width = main_frame.winfo_width()
-        main_height = main_frame.winfo_height()
-        
-        # Center the main frame within the root window
-        root.update_idletasks()
-        root_width = root.winfo_width()
-        root_height = root.winfo_height()
-        
-        main_x_offset = max(0, (root_width - main_width) // 2)
-        main_y_offset = max(0, (root_height - main_height) // 2)
+        # Update text wrapping for all existing labels
+        for widget in scrollable_frame.winfo_children():
+            if isinstance(widget, tk.Label):
+                try:
+                    new_wrap = int(canvas_width * 0.8)
+                    widget.configure(wraplength=new_wrap)
+                except:
+                    pass
     
     # Update the toggle_fullscreen function to use the local center_content
     def toggle_fullscreen(event=None):
@@ -245,16 +355,47 @@ def show_main_window():
     
     root.bind('<Configure>', on_resize)
     
-    ttk.Button(root, text="Quit", command=root.destroy).pack(side="right", padx=10, pady=10)
     root.mainloop()
 
 splash_root = tk.Tk()
-splash_root.geometry("800x600")
-splash_root.title("Loading...")
-splash_label = tk.Label(splash_root, text="Welcome to Prism VLLM", fg="white",font=("Helvetica", 28, "bold"), background='#dec39b')
-splash_root.configure(bg='#dec39b') 
-splash_label.pack(expand=True)
+splash_root.geometry("900x600")
+splash_root.title("Prism VLLM")
+splash_root.configure(bg='#f5f0e8')  # Light beige background
 
-# Show main window after 3 seconds
-splash_root.after(3000, show_main_window)
+# Create main content frame with dark background
+content_frame = tk.Frame(splash_root, bg='#282828', relief='solid', bd=2)
+content_frame.place(relx=0.5, rely=0.5, anchor='center', width=800, height=500)
+
+# Top message box
+top_frame = tk.Frame(content_frame, bg='#282828')
+top_frame.pack(fill='x', padx=20, pady=(30, 20))
+
+top_box = tk.Frame(top_frame, bg='#282828', relief='solid', bd=1, highlightbackground='#ff8c42', highlightthickness=1)
+top_box.pack(fill='x')
+
+# Center title with blocky font effect
+center_frame = tk.Frame(content_frame, bg='#282828')
+center_frame.pack(expand=True, fill='both', padx=20, pady=20)
+
+# Create blocky "WELCOME TO PRISM VLLM" text
+title_text = "WELCOME TO\nPRISM VLLM"
+title_label = tk.Label(center_frame, text=title_text, 
+                      fg='#ff8c42', bg='#282828', 
+                      font=("Consolas", 24, "bold"), 
+                      justify='center')
+title_label.pack(expand=True)
+
+# Bottom status message
+bottom_frame = tk.Frame(content_frame, bg='#282828')
+bottom_frame.pack(fill='x', padx=20, pady=(20, 30))
+
+# Bind Enter key to continue
+def on_enter(event):
+    show_main_window()
+
+splash_root.bind('<Return>', on_enter)
+splash_root.focus_set()
+
+# Show main window after 2 seconds
+splash_root.after(2000, show_main_window)
 splash_root.mainloop()
