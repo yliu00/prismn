@@ -7,7 +7,7 @@ from contextlib import redirect_stdout
 from layer_calculation_demo import demo_layer_calculations
 
 
-async def execute_layer_calculation(model_id):
+async def execute_layer_calculation(model_id, preference):
     """Execute the layer calculation demo and capture its output"""
     try:
         # Capture the output from the demo function
@@ -15,7 +15,7 @@ async def execute_layer_calculation(model_id):
         
         with redirect_stdout(output_buffer):
             # Run the existing demo function
-            success = await demo_layer_calculations()
+            success = await demo_layer_calculations(preference)
         
         # Get the captured output
         output_text = output_buffer.getvalue()
@@ -179,7 +179,7 @@ def show_main_window():
         add_output_line("")
         def run_async_calculation():
             try:
-                result = asyncio.run(execute_layer_calculation(model_id))
+                result = asyncio.run(execute_layer_calculation(model_id, preference))
                 root.after(0, lambda: display_results(result))
             except Exception as e:
                 root.after(0, lambda: display_error(str(e)))

@@ -75,7 +75,7 @@ def _print_why_different(baseline, improved, peers_vram, peers_ci):
     else:
         print("Same set of machines, reordered to shorten data travel.")
 
-async def demo_layer_calculations():
+async def demo_layer_calculations(preference=None):
     print("🚀 Layer Distribution Demo")
     _print_hr()
 
@@ -145,7 +145,7 @@ async def demo_layer_calculations():
         print(f"\n{'='*20}Improved: Carbon + Travel{'='*20}")
         # --- Improved: Carbon + Travel ---
         improved = optimized_distribute_layers_across_peers(
-            config, example_peers, example_carbon, example_locations, qbits, server_location=server_location
+            config, example_peers, example_carbon, example_locations, qbits, server_location=server_location, preference=preference
         )
 
         # --- Executive view: key outcomes ---

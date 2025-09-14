@@ -35,9 +35,7 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
 def calculate_node_score(carbon_intensity: float, 
                          vram_gb: float, 
                          distance_km: float, 
-                         weight_carbon: float = 0.6, 
-                         weight_vram: float = 0.2, 
-                         weight_distance: float = 0.2,
+                         preference: str = None, # "Low Latency" or "Low Carbon Emissions"
                         # Normalization anchors (tune/learn per fleet)
                         carbon_max: float = 1000.0,   # gCO2/kWh
                         vram_max: float = 100.0,      # GB
@@ -56,6 +54,15 @@ def calculate_node_score(carbon_intensity: float,
     Returns: 
         Composite score (lower is better)
     """
+    # Assign weights based on preference
+    weight_carbon = 0.7
+    weight_vram = 0.2
+    weight_distance = 0.1
+    if preference == "Low Latency":
+        weight_carbon = 0.3
+        weight_vram = 0.2
+        weight_distance = 0.5
+
     # Normalize carbon intensity (assume range 0-1000 gCO2/kWh, lower is better)
     carbon_score = carbon_intensity / carbon_max
     
@@ -803,6 +810,7 @@ def optimized_distribute_layers_across_peers(
     batch_size: int = 1,
     seq_length: int = 2048,
     server_location: Tuple[float, float] = None,  # (lat, lon) of server/client ingress
+    preference: str = None # "Low Latency" or "Low Carbon Emissions"
 ) -> Dict[str, Any]:
     """
     Distribute model layers optimally across multiple GPU peers using a greedy + local refinement approach.
@@ -853,7 +861,7 @@ def optimized_distribute_layers_across_peers(
         vram_gb = peers_vram[peer_id]
         d_km = haversine_distance(server_location[0], server_location[1],
                                   peers_locations[peer_id][0], peers_locations[peer_id][1])
-        node_scores[peer_id] = calculate_node_score(carbon_intensity, vram_gb, d_km)
+        node_scores[peer_id] = calculate_node_score(carbon_intensity, vram_gb, d_km, preference)
     # Sort peers by node score (ascending - prefer lower emissions and higher VRAM)
     sorted_candidates = sorted(node_scores.items(), key=lambda x: x[1])
     # print(f"📊 Peer scores (lower is better): {[(pid, f'{score:.3f}') for pid, score in sorted_candidates[:5]]}")
@@ -1001,11 +1009,11 @@ def optimized_distribute_layers_across_peers(
     can_fit_model = total_assigned_layers >= total_layers and embedding_assigned
     
     # Calculate average carbon intensity of selected peers
-    avg_carbon_intensity = sum(peers_carbon_intensity[pid] for pid in selected_peers) / len(selected_peers)
+    avg_carbon_intensity = sum(peers_carbon_intensity[pid] for pid in distribution) / len(distribution)
     
     # Print distribution summary
     print("\n📊 Layer Distribution Summary (Optimized):")
-    print(f"• Machines used: {len(selected_peers)}")
+    print(f"• Machines used: {len(distribution)}")
     print(f"• Total capacity: {total_capacity:.2f}GB")
     print(f"• Average local grid emissions: {avg_carbon_intensity:.1f} gCO₂/kWh")
     print(f"• Approx. total data travel between machines: {tour_distance:.1f} km")
