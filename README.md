@@ -16,8 +16,8 @@ We used the open source Tandemn API repository that was available on GitHub. We 
 
 ## Individual Contributions
 
-Megan - Learned about the Tandemn API and about GPUs more in depth, debugged with the team on problems related to adding location data to the pre-existing API, created the frontend user interface to output the data
-Yichen - Learned about model sharding and parallel computing, implemented the layer distribution algorithm, updated a pre-existing test demo to better compare the new algorithm with the previous approach, worked with the team to connect the user interface with backend
+Megan - Learned about the Tandemn API and about GPUs more in depth, debugged with the team on problems related to adding location data to the pre-existing API, created the frontend user interface to output the data  
+Yichen - Learned about model sharding and parallel computing, implemented the layer distribution algorithm, updated a pre-existing test demo to better compare the new algorithm with the previous approach, worked with the team to connect the user interface with backend  
 Anoushk - Hosted Tandemn server and GPU peers, worked with the team to connect GPU peers to server to test our algorithm on real GPUs
 
 ## Challenges we ran into
