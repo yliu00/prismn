@@ -100,8 +100,21 @@ def show_main_window():
     preference_var = tk.StringVar(value="Low Carbon Emissions")
     preference_dropdown = ttk.Combobox(pref_box, textvariable=preference_var, 
                                       values=["Low Latency", "Low Carbon Emissions"], 
-                                      state="readonly", width=15, font=("Consolas", 11))
-    preference_dropdown.pack(side="right", padx=15, pady=10)
+                                      state="readonly", width=20, font=("Consolas", 11))
+    preference_dropdown.pack(side="right", padx=15, pady=20)
+
+    second_pref_box = tk.Frame(center_frame, bg='#282828', relief='solid', bd=1, highlightbackground='#ff8c42', highlightthickness=1)
+    second_pref_box.pack(fill='x', padx=10, pady=(10, 0))
+
+    model_label = tk.Label(second_pref_box, text="* Choose Your Model", fg="#ff8c42", bg='#282828', anchor="w", font=("Consolas", 12))
+    model_label.pack(side="left", padx=15, pady=10)
+
+    # Create dropdown for model selection
+    model_var = tk.StringVar(value="meta-llama/Llama-3.2-1B")
+    model_preference_dropdown = ttk.Combobox(second_pref_box, textvariable=model_var, 
+                                      values=["meta-llama/Llama-3.2-1B"], 
+                                      state="readonly", width=20, font=("Consolas", 11))
+    model_preference_dropdown.pack(side="right", padx=15, pady=10)
 
     # Helper functions for output and calculation
     def clear_output():
