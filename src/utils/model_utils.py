@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Tuple
 import aiohttp
 from huggingface_hub import get_safetensors_metadata
 
-from src.config.settings import DEFAULT_CONFIG_FILENAME, HUGGINGFACE_TOKEN
+from config.settings import DEFAULT_CONFIG_FILENAME, HUGGINGFACE_TOKEN
 
 
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:

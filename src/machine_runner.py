@@ -1,8 +1,10 @@
+import argparse
 import asyncio
 import json
 import os
 import pickle
 import socket
+import sys
 import threading
 import time
 from typing import Any, Dict, List
@@ -21,6 +23,29 @@ import utils.req_batcher as req_batcher
 # from lmcache.v1.cache_engine import LMCacheEngineBuilder
 from config.settings import HUGGINGFACE_TOKEN, SERVER_HOST, SERVER_PORT
 from utils.db_utils import get_active_peers, register_peer
+
+
+def load_env_file(env_file_path: str):
+    """Load environment variables from a specific .env file"""
+    from dotenv import load_dotenv
+    from pathlib import Path
+    
+    if env_file_path:
+        env_path = Path(env_file_path)
+        if env_path.exists():
+            load_dotenv(dotenv_path=env_path)
+            print(f"✅ Loaded environment from: {env_path}")
+        else:
+            print(f"❌ Environment file not found: {env_path}")
+            sys.exit(1)
+    else:
+        # Use default .env file
+        env_path = Path(__file__).parent.parent / ".env"
+        if env_path.exists():
+            load_dotenv(dotenv_path=env_path)
+            print(f"✅ Loaded default environment from: {env_path}")
+        else:
+            print(f"⚠️ No environment file found, using system environment variables")
 from utils.deployment_utils import (
     deploy_model_orchestrator,
     report_deployment_completion,
@@ -722,7 +747,7 @@ async def http_heartbeat_loop(current_peer_ticket: str, interval_s: float = 1.0)
     print(f"HB {server_url}")
     server_added = False
 
-    async with httpx.AsyncClient(timeout=2.0) as client:
+    async with httpx.AsyncClient(timeout=5.0) as client:
         while True:
             try:
                 # Offload potentially blocking metrics collection
@@ -736,16 +761,19 @@ async def http_heartbeat_loop(current_peer_ticket: str, interval_s: float = 1.0)
                     "gpu_count": len(metrics.gpu_info),
                     "timestamp": int(time.time()),
                 }
-                print(payload)
+                # print(payload)
                 response = await client.post(server_url, json=payload)
                 print(f"response: {response} | {server_url}")
                 if response.status_code == 200:
                     data = response.json()
+                    # Reset consecutive failures on successful heartbeat
+                    consecutive_failures = 0
                     # Only add server to network once
                     if not server_added:
                         central_server_ticket = data["central_server_ticket"]
                         print(f"🔗 Central server ticket: {central_server_ticket}")
                         server_added = True
+                    print(f"✅ Heartbeat successful (failures reset to {consecutive_failures})")
                     # print(f"{PEER_COLOR}💓 Sent heartbeat | CPU {metrics.cpu_percent:.1f}% VRAM {total_free_vram:.1f} GB → ACK {Style.RESET_ALL}")
                     # print(f"{PEER_COLOR}💓 Sent heartbeat | CPU {metrics.cpu_percent:.1f}% VRAM {total_free_vram:.1f} GB → ACK {Style.RESET_ALL}")
                 else:
@@ -754,9 +782,17 @@ async def http_heartbeat_loop(current_peer_ticket: str, interval_s: float = 1.0)
                     print(
                         f"{PEER_COLOR}⚠️ Heartbeat HTTP {response.status_code}{Style.RESET_ALL}"
                     )
-            except Exception as e:
-                print(f"HB exception {e}")
+            except httpx.ConnectError as e:
                 consecutive_failures += 1
+                print(f"HB connection error: {str(e)}, consecutive_failures: {consecutive_failures}")
+                print(f"{PEER_COLOR}⚠️ Heartbeat connection error: {e}{Style.RESET_ALL}")
+            except httpx.TimeoutException as e:
+                consecutive_failures += 1
+                print(f"HB timeout error: {str(e)}, consecutive_failures: {consecutive_failures}")
+                print(f"{PEER_COLOR}⚠️ Heartbeat timeout error: {e}{Style.RESET_ALL}")
+            except Exception as e:
+                consecutive_failures += 1
+                print(f"HB exception {str(e)}, consecutive_failures: {consecutive_failures}")
                 print(f"{PEER_COLOR}⚠️ Heartbeat error: {e}{Style.RESET_ALL}")
             if consecutive_failures >= max_failures:
                 print(
@@ -786,8 +822,9 @@ async def main():
         current_peer_ticket  # check if we even need ticket_and_hostname
     )
 
+    peer_name = os.environ.get("PEER_NAME", "unknown")
     print(
-        f"🤖 Running as peer: {current_peer_ticket}"
+        f"🤖 Running as peer: {current_peer_ticket} (name: {peer_name})"
     )  # ? Misleading, does our use of the term peer mean that it is registered w server?
     heartbeat_task = asyncio.create_task(http_heartbeat_loop(current_peer_ticket))
     LONG = os.environ.get("LONG",42.5907715)
@@ -857,5 +894,35 @@ async def main():
     #########################################################################
 
 
+def parse_arguments():
+    """Parse command line arguments"""
+    parser = argparse.ArgumentParser(description="Run a distributed computation peer node")
+    parser.add_argument(
+        "--env", 
+        type=str, 
+        help="Path to environment file (e.g., peer1.env, peer2.env). Default: .env"
+    )
+    parser.add_argument(
+        "--peer-name",
+        type=str,
+        help="Name for this peer (for identification in logs)"
+    )
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
+    # Parse command line arguments
+    args = parse_arguments()
+    
+    # Load environment file before importing settings
+    load_env_file(args.env)
+    
+    # Re-import settings after loading environment
+    from config.settings import HUGGINGFACE_TOKEN, SERVER_HOST, SERVER_PORT
+    
+    # Set peer name if provided
+    if args.peer_name:
+        os.environ["PEER_NAME"] = args.peer_name
+        print(f"🏷️ Running as peer: {args.peer_name}")
+    
     asyncio.run(main())
