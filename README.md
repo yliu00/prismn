@@ -2,6 +2,10 @@
 
 A carbon- and latency-aware placement engine that partitions LLM layers across a global GPU swarm to deliver faster responses, lower emissions, and higher utilization—without changing model quality.
 
+<br>
+
+![Prismn Banner](Prismn_Banner.png)
+
 ## Inspiration
 
 The use of LLMs in the past few years has impacted our environment significantly. LLMs are known for outputting lots of carbon and using up an extensive amount of energy. We wanted to find a solution to manage this problem because we believe the use of LLMs will continue to increase in the future. We discovered that Tandemn had an API that distributed the layers of an LLM on multiple GPUs to make more efficient, optimal decisions regarding usage. We decided to leverage this open source code and implement a carbon-aware router to make even more informed decisions that take into consideration the impacts of LLMs on the environment. Our goal was to create a tool for devs that promotes sustainability and helps reduce the carbon footprint of these models.
