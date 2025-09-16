@@ -1,45 +1,61 @@
-# Prismn - HackMIT 2025 Project By Yichen Liu, Anoushk Kharangate, and Megan Kulshekar
-
+# Prismn — HackMIT 2025
 A carbon- and latency-aware placement engine that partitions LLM layers across a global GPU swarm to deliver faster responses, lower emissions, and higher utilization—without changing model quality.
+
+> _By Yichen Liu, Anoushk Kharangate, and Megan Kulshekar_
 
 <br>
 
 ![Prismn Banner](Prismn_Banner.png)
 
+![HackMIT](https://img.shields.io/badge/HackMIT-2025-purple)
+![Made with Python](https://img.shields.io/badge/Python-3.8%2B-3776AB?logo=python&logoColor=white)
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)
+
+## Overview
+Prismn splits large language models into pipeline stages and distributes those layers across multiple GPU peers—optimizing for **lower carbon intensity**, **shorter geographic distance (as a latency proxy)**, and **available VRAM**. The result is **faster responses, fewer machines involved, and lower emissions**, all while maintaining model quality.
+
+
 ## Inspiration
+The rapid growth of LLMs has real environmental costs: high energy use and significant carbon emissions. We set out to make model serving **more sustainable by default**. Building on the open-source **Tandemn** API—which already supports distributing LLM layers across GPUs—we added a **carbon-aware router** and **distance-aware ordering** so developers can make greener, lower-latency placements without changing their models or workflows.
 
-The use of LLMs in the past few years has impacted our environment significantly. LLMs are known for outputting lots of carbon and using up an extensive amount of energy. We wanted to find a solution to manage this problem because we believe the use of LLMs will continue to increase in the future. We discovered that Tandemn had an API that distributed the layers of an LLM on multiple GPUs to make more efficient, optimal decisions regarding usage. We decided to leverage this open source code and implement a carbon-aware router to make even more informed decisions that take into consideration the impacts of LLMs on the environment. Our goal was to create a tool for devs that promotes sustainability and helps reduce the carbon footprint of these models.
+## What Prismn Does
+1. **Scores peers** using a weighted sum of:
+   - **Carbon intensity** (gCO₂/kWh) — prefer cleaner grids  
+   - **Geographic distance** to ingress — proxy for lower latency  
+   - **Free VRAM** — ensure capacity and higher utilization
+2. **Greedily selects** the smallest feasible set of peers (in **layer units**, including embeddings).
+3. **Orders peers** via a Traveling Salesman heuristic (nearest-neighbor + **2-opt** refinement) to minimize inter-peer data travel.
+4. **Shards the model** accordingly and returns an execution plan: ordered peers, per-peer layer counts, VRAM utilization, average grid emissions, and approximate “tour” distance.
 
-## What it does
+## How We Built It
+- Extended the **Tandemn** repository to implement **carbon- and distance-aware selection** plus **pipeline ordering**.
+- Added **quantization-aware per-layer VRAM estimation** (weights + activations, embeddings accounted for) with safety margins to avoid OOMs.
+- Built a lightweight **PyTinker** UI to compare **VRAM-only** vs **Carbon+Distance** policies side-by-side.
+- Tested multi-peer scenarios in a Linux environment.
 
-Given a request to a specified LLM model, Prismn slices the model by layers and distributes the layers across GPU peers by taking into consideration not only the VRAM capacity of each peer but also the carbon effects of choosing each peer and the distance between peers. The algorithm consists first of a weighted sum of carbon efficiency, distance, and VRAM capacity, in order to select a list of the best peers needed to fulfill the request. Then, to decide the order in which the requests will be sent, we implemented a Travelling Salesman Problem algorithm to find the shortest path that traverses all selected peers, with an additional 2-opt refinement to further reduce the distance between peers. The algorithm then returns the list of peers in order, and the model is sharded accordingly.
+## Key Benefits
+- **Latency:** Fewer hops and shorter paths reduce end-to-end latency.
+- **Sustainability:** Prefers low-carbon regions automatically, lowering emissions per request.
+- **Utilization:** Packs layers by accurate per-layer VRAM, reducing idle memory and stages.
+- **Pragmatic & fast:** Greedy selection + 2-opt ordering give strong results with low overhead.
 
-## How we built it
+## Architecture
+- **Coordinator (server):** peer discovery, scoring, ordering, and layer placement.
+- **Peers (GPU nodes):** report VRAM/locality; execute assigned layers.
+- **Database:** MongoDB for metrics and peer state.
+- **Networking:** Iroh for peer-to-peer communication.
 
-We used the open source Tandemn API repository that was available on GitHub. We modified the deploy function to use a newly created function that optimizes the distribution of layers among GPU peers while taking into account the location of each peer. We also added and modified functions to source to a specific peer based on a priority of either low carbon emission or low latency. PyTinker was used for the frontend user interface. The testing of multiple peers was performed in a Linux environment.
+## What's Next
+* **Live carbon data:** Integrate the [Electricity Maps API](https://portal.electricitymaps.com/developer-hub/api/reference#carbon-intensity-latest) for real-time regional carbon intensity.
+* **Richer sourcing signals:** Incorporate GPU specs, model type, and energy source metadata.
+* **Better latency modeling:** Add measured **ping/RTT** and throughput where available (distance remains a fallback).
+* **Scale ordering:** Current TSP + 2-opt performs well up to hundreds of peers; add geographic **clustering** to accelerate larger deployments.
+* **Alternative formulations:** Explore **min-cut / max-flow** style approaches to balance capacity vs. distance when placement resembles network flow.
+* **UI improvements:** More preferences, presets, and additional LLM choices.
+* **Broader testing:** Real GPUs distributed across regions/continents.
 
-## Individual Contributions
-
-Megan - Learned about the Tandemn API and about GPUs more in depth, debugged with the team on problems related to adding location data to the pre-existing API, created the frontend user interface to output the data  
-Yichen - Learned about model sharding and parallel computing, implemented the layer distribution algorithm, updated a pre-existing test demo to better compare the new algorithm with the previous approach, worked with the team to connect the user interface with backend  
-Anoushk - Hosted Tandemn server and GPU peers, worked with the team to connect GPU peers to server to test our algorithm on real GPUs
-
-## Challenges we ran into
-
-The existing Tandemn codebase lacked documentation and contained incomplete functions, making it hard to follow the code logic sometimes, so we worked with the Tandemn representatives to better understand their architecture and design choices. There were also some issues in the existing code with the heartbeat functions that we debugged with the representatives.
-
-## Accomplishments that we're proud of
-
-We’re proud that we were able to navigate the Tandemn repository, make sense of it, and make a meaningful contribution to the existing work. The distribution logic that we added not only successfully reduces carbon emissions, but also improves travel latency.
-
-## What we learned
-
-We learned a lot about model sharding, GPUs, backend operations, the carbon impacts of various LLM models, the problem of choosing which GPUs to shard to and in which order, and so much more!
-
-## What's next for our project
-
-We would like to implement the carbon intensity API from Electricity Maps (https://portal.electricitymaps.com/developer-hub/api/reference#carbon-intensity-latest) to have a more accurate calculation of the carbon intensity of a certain region. We did not use this during the hackathon since the features we needed from the API required a paid subscription. In the future, we also plan on improving the overall algorithm for sourcing so that it includes more metrics like GPU specs, model type, and energy source. To improve latency optimization, in addition to geographic distance, we would also use ping RTT to get the actual time needed for a signal to travel between peers for a better estimate of latency. In addition, the current TSP algorithm with 2-opt refinement works well for smaller numbers of peers (<300), but as we scale up and the number of peers increases, we would add a layer of geographic clusters to improve the speed of the TSP algorithm. We could also replace the current TSP algorithm with a max-flow min-cut algorithm, since the goal is to maximize VRAM capacity (and the inverse of the carbon intensity) while minimizing distances between peers. We also plan on adding improved controls to the UI, including more preference choices and additional LLM model choices. Our testing would also be improved to use real GPUs scattered across the globe.
-
+---
 
 ## Prerequisites
 
@@ -52,8 +68,8 @@ We would like to implement the carbon intensity API from Electricity Maps (https
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/iroh-tandem.git
-cd iroh-tandem
+git clone https://github.com/yliu00/prismn
+cd prismn
 ```
 
 2. Install dependencies:
@@ -82,14 +98,11 @@ python src/machine_runner.py
 
 The server will provide a ticket that needs to be shared with all peer machines.
 
-## Architecture
-
-The system consists of:
-- A central server that coordinates the distributed computation
-- Multiple peer machines that perform the actual computation
-- MongoDB for storing metrics and peer information
-- Iroh for peer-to-peer communication
-
 ## License
 
 MIT License 
+
+---
+
+<p align="center"><sub>Why the extra “n”? A little homage to <strong>Tandemn</strong> ✨</sub></p>
+<p align="center">Built with <span title="love">❤️</span> and <span title="coffee">☕</span> — Prismn</p>
